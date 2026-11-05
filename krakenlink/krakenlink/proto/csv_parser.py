@@ -8,7 +8,7 @@ class CSVLineError(ValueError): pass
 @dataclass(frozen=True)
 class KrakenDOA:
     timestamp_ms:int; bearing_deg:float; confidence:float; rssi_db:float; freq_hz:int
-    array_value:float; latency_ms:int; station:str; latitude:float; longitude:float
+    array_value:str; latency_ms:int; station:str; latitude:float; longitude:float
     heading:float; heading2:float; gps:str; radii:tuple; spectrum:tuple
 
 def parse_doa_line(line: str) -> KrakenDOA:
@@ -16,7 +16,8 @@ def parse_doa_line(line: str) -> KrakenDOA:
     if len(fields) != FIELD_COUNT: raise CSVLineError(f'expected 377 fields, got {len(fields)}')
     try:
         bearing = float(fields[1]) % 360.0
-        return KrakenDOA(int(float(fields[0])), bearing, float(fields[2]), float(fields[3]), int(float(fields[4])), float(fields[5]), int(float(fields[6])), fields[7], float(fields[8]), float(fields[9]), float(fields[10]), float(fields[11]), fields[12], tuple(float(x) for x in fields[13:17]), tuple(float(x) for x in fields[17:377]))
+        # Field 6 is the Kraken array label/value (the simulator writes UCA/ULA).
+        return KrakenDOA(int(float(fields[0])), bearing, float(fields[2]), float(fields[3]), int(float(fields[4])), fields[5], int(float(fields[6])), fields[7], float(fields[8]), float(fields[9]), float(fields[10]), float(fields[11]), fields[12], tuple(fields[13:17]), tuple(float(x) for x in fields[17:377]))
     except (ValueError, OverflowError) as e: raise CSVLineError('invalid numeric field') from e
 
 def spectrum_bins(theta_values, peak=None):
