@@ -27,17 +27,17 @@ class Bridge:
         self.transport=transport or self._transport(cfg.get('transport',{})); self.csv=logger or DOALogger(**cfg.get('logging',{})); self.bucket=TokenBucket(cfg.get('rate',{}).get('bytes_per_second',625),transport=cfg.get('transport',{}).get('type','mavlink'),logger=self.log)
         self.link=LinkMonitor(); self.seq=0; self.rx_bad=0; self.running=False; self.fc=None; self.last_doas={}; self.last_doa_send={}; self.last_spec_send=0.; self.latest_samples={}; self.last_status=0; self.last_hb=0
         self.pending=[]; self.pending_order=0; self.pressure_toggle=0
-        cc=cfg.get('commands',{}); self.commands=CommandWorker(self.kraken,self._send_ack,calibration_timeout=cc.get('calibration_timeout',30),consumed_timeout=k.get('consumed_timeout',5),daq_fs=cfg.get('daq_fs',2400000),retune_vfo_policy=cc.get('retune_vfo_policy','reject'))
+        cc=cfg.get('commands',{}); self.commands=CommandWorker(self.kraken,self._send_ack,calibration_timeout=cc.get('calibration_timeout',30),consumed_timeout=k.get('consumed_timeout',5),daq_fs=cfg.get('daq_fs',2400000),retune_vfo_policy=cc.get('retune_vfo_policy','reject'),calib_settle_s=cc.get('calib_settle_s',1.0))
         fc_cfg=cfg.get('fc',{}).get('connection')
         if fc_cfg and cfg.get('transport',{}).get('type')!='mavlink':
             try:
                 from .fc import FCReader
-                self.fc=FCReader(fc_cfg); self.fc.start()
+                self.fc=FCReader(fc_cfg,baud=cfg.get('fc',{}).get('baud',cfg.get('transport',{}).get('baud',921600))); self.fc.start()
             except Exception:self.log.exception('FC reader unavailable')
         elif fc_cfg and cfg.get('transport',{}).get('type')=='mavlink':
             try:
                 from .fc import FCReader
-                self.fc=FCReader(fc_cfg,shared_link=self.transport); self.fc.start()
+                self.fc=FCReader(fc_cfg,shared_link=self.transport,baud=cfg.get('transport',{}).get('baud',921600)); self.fc.start()
             except Exception:self.log.exception('FC reader unavailable')
     def _transport(self,c):
         typ=c.get('type','loopback')
@@ -46,29 +46,33 @@ class Bridge:
             return LoopbackTransport(c.get('host','127.0.0.1'),c.get('port',14560),c.get('bind_host','127.0.0.1'),c.get('bind_port',14561))
         if typ=='mavlink':
             from .transports.mavlink import MAVLinkTransport
-            return MAVLinkTransport(c['connection'],source_system=c.get('source_system',1),source_component=c.get('source_component',191),target_system=c.get('target_system',255),target_component=c.get('target_component',0),fc_enabled=bool(self.cfg.get('fc',{}).get('connection')))
+            return MAVLinkTransport(c['connection'],source_system=c.get('source_system',1),source_component=c.get('source_component',191),target_system=c.get('target_system',255),target_component=c.get('target_component',0),fc_enabled=bool(self.cfg.get('fc',{}).get('connection')),baud=c.get('baud',921600))
         if typ=='espnow_uart':
             from .transports.espnow_uart import ESPNowUARTTransport
-            return ESPNowUARTTransport(c['port'],c.get('baudrate',460800))
+            return ESPNowUARTTransport(c['port'],c.get('baud',460800))
         raise ValueError('unknown transport '+typ)
     def _frame(self,typ,msg):
         b=msg.encode() if hasattr(msg,'encode') else bytes(msg); f=Frame(typ,self.seq,b); self.seq=(self.seq+1)&65535; return f.encode()
     def _send_ack(self,ack):
         self._send('ACK',ACK,ack)
     def _send(self,kind,typ,msg,vfo=0):
-        frame=self._frame(typ,msg); self.pending.append((PRIORITY[kind],self.pending_order,vfo,kind,frame)); self.pending_order+=1
+        payload=msg.encode() if hasattr(msg,'encode') else bytes(msg)
+        self.pending.append((PRIORITY[kind],self.pending_order,vfo,kind,typ,payload)); self.pending_order+=1
         return True
     def _flush(self):
         # Only this scheduling cycle is retained: denied frames are dropped.
         pending=self.pending; self.pending=[]
         pending.sort(key=lambda x:(x[0],x[2] if x[3]=='DOA' else x[1]))
-        for _,_,_,kind,frame in pending:
+        for _,_,_,kind,typ,payload in pending:
             stats=self.transport.stats(); txbuf=stats.get('txbuf',100)
             if txbuf<25 and kind not in ('ACK','STATUS'):continue
             if txbuf<50 and kind in ('DOA','SPECTRUM','POSE'):
                 self.pressure_toggle+=1
                 if self.pressure_toggle%2:continue
-            if self.bucket.allow(len(frame)):self.transport.send(frame)
+            frame=Frame(typ,self.seq,payload).encode()
+            if self.bucket.allow(len(frame)):
+                self.seq=(self.seq+1)&65535
+                self.transport.send(frame)
     def _receive(self):
         while True:
             raw=self.transport.recv()

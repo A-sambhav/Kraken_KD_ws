@@ -52,6 +52,30 @@ def test_command_idempotency_busy_calibration_and_noop(tmp_path):
         assert busy.result==2 and busy.reason==6
     finally:sim.stop()
 
+def test_retune_done_waits_for_simulator_calibration_gap(tmp_path):
+    sim=KrakenSimulator(tmp_path,calibration_gap=2.0,poll_interval=.1); sim.start()
+    try:
+        io=KrakenIO(tmp_path,poll_interval=.1,consumed_timeout=2)
+        assert wait_for(lambda: bool(io.poll()))
+        acks=[]; worker=CommandWorker(io,acks.append,calibration_timeout=6,consumed_timeout=2,calib_settle_s=1.0)
+        accepted_at=time.monotonic()
+        assert worker.handle(CommandMessage(70,1,struct.pack('<I',433100000))).result==0
+        assert wait_for(lambda: (io.poll(), any(a.cmd_id==70 and a.result in (1,3,4) for a in acks))[1],7)
+        final=next(a for a in acks if a.cmd_id==70 and a.result in (1,3,4))
+        assert final.result==1
+        assert time.monotonic()-accepted_at>=2.0
+    finally:sim.stop()
+
+def test_example_loopback_ports_are_complementary():
+    from pathlib import Path
+    from krakenlink.bridge.__main__ import load_config
+    root=Path(__file__).resolve().parents[1]
+    bridge=load_config(root/'krakenlink/bridge/config.example.toml')
+    ground=load_config(root/'ground.example.toml')
+    # Bridge loopback defaults: sends to 14560 and binds 14561.
+    assert bridge['transport']['type']=='mavlink'
+    assert (ground['transport']['port'],ground['transport']['bind_port'])==(14561,14560)
+
 def test_rate_limiter_budget_and_priority():
     b=TokenBucket(100,capacity=100,transport='mavlink')
     sent=0
@@ -167,6 +191,26 @@ def test_bridge_flush_radio_backpressure_gates():
     for k in ('DOA','ACK','STATUS'): b._send(k,{'DOA':DOA,'ACK':ACK,'STATUS':3}[k],DOAMessage(0,0,0,0,0,0,0,0,0) if k=='DOA' else AckMessage(1,1,0,0) if k=='ACK' else StatusMessage(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0))
     b._flush(); assert [f.type for f in t.sent]==[ACK,3]
 
+def test_bridge_assigns_sequences_only_to_transmitted_frames():
+    from krakenlink.bridge.__main__ import Bridge
+    class T:
+        sent=[]
+        def send(self,b):self.sent.append(decode_frame(b));return True
+        def recv(self):return None
+        def stats(self):return {}
+        def close(self):pass
+    class L:
+        ok=True
+        def close(self):pass
+    t=T(); b=Bridge({'transport':{'type':'loopback'},'rate':{'bytes_per_second':1}},transport=t,logger=L())
+    # One 16-byte frame fits the deliberately tiny budget; the following frames drop.
+    b.bucket.capacity=b.bucket.tokens=16; b.bucket.rate=0
+    for cid in (1,2,3):b._send('ACK',ACK,AckMessage(cid,1,0,0))
+    b._flush(); assert [f.seq for f in t.sent]==[0]
+    b.bucket.tokens=16
+    b._send('ACK',ACK,AckMessage(4,1,0,0)); b._flush()
+    assert [f.seq for f in t.sent]==[0,1]
+
 def test_mavlink_single_connection_dispatch_and_intervals():
     from types import SimpleNamespace
     from krakenlink.bridge.transports.mavlink import MAVLinkTransport
@@ -183,10 +227,13 @@ def test_mavlink_single_connection_dispatch_and_intervals():
         def recv_match(self,**kw): return queue.pop(0) if queue else None
         def close(self): pass
     queue=[]; conn=Conn()
-    util=SimpleNamespace(mavlink=Mav,mavlink_connection=lambda *a,**k:conn)
-    tr=MAVLinkTransport('/fake',source_system=42,fc_enabled=True,mavutil_module=util)
+    connect_args=[]
+    def connect(*a,**k): connect_args.append((a,k)); return conn
+    util=SimpleNamespace(mavlink=Mav,mavlink_connection=connect)
+    tr=MAVLinkTransport('/fake',source_system=42,fc_enabled=True,mavutil_module=util,baud=57600)
     reader=FCReader('/fake',shared_link=tr); tr.fc_reader=reader
     assert len(calls)==3 and all(c[4] in (33,74,24) and c[5]==500000 for c in calls)
+    assert connect_args[0][1]['baud']==57600 and connect_args[0][1]['source_system']==42
     assert tr.conn is conn
     msg=SimpleNamespace(get_type=lambda:'GLOBAL_POSITION_INT',hdg=9000,time_boot_ms=1,lat=2,lon=3,relative_alt=400)
     queue.append(msg); tr.recv(); pose,heading=reader.snapshot()
@@ -209,6 +256,12 @@ def test_espnow_uart_reopens_after_serial_io_error():
     tr=ESPNowUARTTransport('/fake',serial_instance=instances.append(Serial(True)) or instances[0],serial_factory=factory,reopen_interval=0)
     assert not tr.send(b'x') and instances[0].closed
     assert tr.send(b'x') and len(instances)==2
+
+def test_espnow_uart_configured_baud_is_passed_to_serial_factory():
+    from krakenlink.bridge.transports.espnow_uart import ESPNowUARTTransport
+    calls=[]
+    ESPNowUARTTransport('/fake',baudrate=230400,serial_factory=lambda *a,**k:(calls.append((a,k)) or object()))
+    assert calls[0]==(('/fake',),{'baudrate':230400,'timeout':0})
 
 def test_command_worker_observes_samples_without_polling_and_uses_daq_window():
     from types import SimpleNamespace

@@ -2,8 +2,8 @@
 import time
 from .base import Transport
 class MAVLinkTransport(Transport):
-    def __init__(self,connection,source_system=1,source_component=191,target_system=255,target_component=0,payload_type=0xA700,fc_enabled=False,connection_factory=None,mavutil_module=None,reopen_interval=2.,fc_system=1,fc_component=1):
-        self.connection=connection; self.source_system=source_system; self.source_component=source_component; self.target_system=target_system; self.target_component=target_component; self.payload_type=payload_type; self.fc_enabled=fc_enabled; self.fc_reader=None; self.connection_factory=connection_factory; self.fc_system=fc_system; self.fc_component=fc_component; self.reopen_interval=reopen_interval; self.reopen_at=0.; self.conn=None
+    def __init__(self,connection,source_system=1,source_component=191,target_system=255,target_component=0,payload_type=0xA700,fc_enabled=False,connection_factory=None,mavutil_module=None,reopen_interval=2.,fc_system=1,fc_component=1,baud=921600):
+        self.connection=connection; self.source_system=source_system; self.source_component=source_component; self.target_system=target_system; self.target_component=target_component; self.payload_type=payload_type; self.fc_enabled=fc_enabled; self.fc_reader=None; self.connection_factory=connection_factory; self.fc_system=fc_system; self.fc_component=fc_component; self.baud=baud; self.reopen_interval=reopen_interval; self.reopen_at=0.; self.conn=None
         if mavutil_module is not None:self.mavutil=mavutil_module
         else:
             from pymavlink import mavutil
@@ -12,8 +12,8 @@ class MAVLinkTransport(Transport):
         except Exception:self.conn=None; self.reopen_at=time.monotonic()+self.reopen_interval
         self.last_hb=0; self.txbuf=100; self.tx=0; self.rx=0; self.bad=0
     def _open(self):
-        if self.connection_factory:self.conn=self.connection_factory(self.connection,source_system=self.source_system,source_component=self.source_component)
-        else:self.conn=self.mavutil.mavlink_connection(self.connection,source_system=self.source_system,source_component=self.source_component)
+        if self.connection_factory:self.conn=self.connection_factory(self.connection,source_system=self.source_system,source_component=self.source_component,baud=self.baud)
+        else:self.conn=self.mavutil.mavlink_connection(self.connection,source_system=self.source_system,source_component=self.source_component,baud=self.baud)
         self.reopen_at=0.
         if self.fc_enabled:
             for mid in (33,74,24):

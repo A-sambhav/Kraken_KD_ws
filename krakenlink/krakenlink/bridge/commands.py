@@ -4,9 +4,9 @@ from ..proto.validate import validate_command, NackReason
 from ..proto.messages import AckMessage
 
 class CommandWorker:
-    def __init__(self, kraken, ack_callback=None, calibration_timeout=30., consumed_timeout=5., daq_fs=2_400_000, retune_vfo_policy='reject'):
+    def __init__(self, kraken, ack_callback=None, calibration_timeout=30., consumed_timeout=5., daq_fs=2_400_000, retune_vfo_policy='reject', calib_settle_s=1.0):
         self.kraken=kraken; self.send_ack=ack_callback or (lambda ack:None); self.calibration_timeout=calibration_timeout
-        self.consumed_timeout=consumed_timeout; self.daq_fs=daq_fs; self.policy=retune_vfo_policy; self.cache=collections.OrderedDict()
+        self.consumed_timeout=consumed_timeout; self.daq_fs=daq_fs; self.policy=retune_vfo_policy; self.calib_settle_s=float(calib_settle_s); self.cache=collections.OrderedDict()
         self.lock=threading.RLock(); self.busy=False; self.calibrating=False; self.thread=None; self.last_ack=None; self.write_count=0
     def handle(self, cmd):
         with self.lock:
@@ -40,7 +40,7 @@ class CommandWorker:
                 window=self.daq_fs/max(1,int(old.get('dsp_decimation',1)))/2
                 while time.monotonic()<deadline:
                     for sample in list(self.kraken.samples):
-                        if sample.timestamp_ms>int(written*1000) and abs(sample.freq_hz-center)<=window:
+                        if sample.timestamp_ms>int((written+self.calib_settle_s)*1000) and abs(sample.freq_hz-center)<=window:
                             written=None; break
                     if written is None: break
                     time.sleep(min(self.kraken.poll_interval,.05))

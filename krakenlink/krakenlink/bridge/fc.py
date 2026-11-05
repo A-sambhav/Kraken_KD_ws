@@ -2,7 +2,7 @@
 import threading,time
 from ..proto.messages import PoseMessage
 class FCReader:
-    def __init__(self,connection,reopen_interval=2.,shared_link=None): self.connection=connection; self.reopen_interval=reopen_interval; self.shared_link=shared_link; self.ok=False; self.pose=None; self.heading=None; self.lock=threading.Lock(); self.running=False
+    def __init__(self,connection,reopen_interval=2.,shared_link=None,baud=921600,source_system=1): self.connection=connection; self.reopen_interval=reopen_interval; self.shared_link=shared_link; self.baud=baud; self.source_system=source_system; self.ok=False; self.pose=None; self.heading=None; self.lock=threading.Lock(); self.running=False
     def start(self):self.running=True; threading.Thread(target=self._run,daemon=True).start()
     def stop(self):self.running=False
     def _run(self):
@@ -14,7 +14,7 @@ class FCReader:
         while self.running:
             try:
                 from pymavlink import mavutil
-                m=mavutil.mavlink_connection(self.connection,source_system=int(getattr(self,'source_system',1)),autoreconnect=True)
+                m=mavutil.mavlink_connection(self.connection,source_system=int(self.source_system),baud=self.baud,autoreconnect=True)
                 self.ok=True
                 for mid in (33,74,24): m.mav.command_long_send(0,0,mavutil.mavlink.MAV_CMD_SET_MESSAGE_INTERVAL,0,mid,500000,0,0,0,0,0)
                 while self.running:

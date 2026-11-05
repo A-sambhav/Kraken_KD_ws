@@ -39,7 +39,7 @@ class KrakenIO:
             json.dump(current,f,ensure_ascii=False); f.flush(); os.fsync(f.fileno())
         os.replace(tmp,self.settings_path)
     def apply(self, changes, calibration=False, timeout=None):
-        """Atomic RMW and consumed check; returns write epoch and pre-write settings."""
+        """Atomic RMW and consumed check; returns consumption epoch and prior settings."""
         for attempt in range(2):
             try: before=self.settings()
             except (OSError,ValueError,TypeError) as e: raise RuntimeError('KRAKEN_DOWN') from e
@@ -50,7 +50,7 @@ class KrakenIO:
             while time.monotonic()<deadline:
                 try: current=self.settings()
                 except (OSError,ValueError,TypeError): current={}
-                if current.get('ext_upd_flag') is False and all(current.get(k)==v for k,v in changes.items()): return written,before
+                if current.get('ext_upd_flag') is False and all(current.get(k)==v for k,v in changes.items()): return time.time(),before
                 time.sleep(min(.05,max(0,deadline-time.monotonic())))
             if attempt==0:
                 self.log('warning','settings write lost race; retrying once')

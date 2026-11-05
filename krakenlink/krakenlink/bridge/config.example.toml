@@ -12,6 +12,8 @@ settings_writer = "atomic"
 [transport]
 type = "mavlink"
 connection = "/dev/serial0"
+baud = 921600
+source_system = 1
 
 [rate]
 bytes_per_second = 625
@@ -19,10 +21,13 @@ spectrum = true
 
 [commands]
 calibration_timeout = 30.0
+calib_settle_s = 1.0
 retune_vfo_policy = "reject"
 
 [fc]
 connection = "/dev/serial0"
+# When this is the same device as [transport].connection, the FC reader shares
+# the transport connection and uses [transport].baud.
 
 [logging]
 directory = "/var/log/krakenlink"

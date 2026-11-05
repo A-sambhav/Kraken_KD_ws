@@ -11,13 +11,23 @@ def _wait_for(predicate, timeout=3.0):
         time.sleep(0.02)
     return False
 
+def _read_initial_doa(path):
+    """Wait for a complete initial frame; the producer truncates before rewriting."""
+    try:
+        lines=path.read_text().splitlines()
+        if not lines or len(lines[0].split(',')) != 377:return None
+        return '\n'.join(lines)
+    except (OSError,UnicodeDecodeError):
+        return None
+
 
 def test_direct_settings_write_triggers_calibration_pause_and_resume(tmp_path):
     sim=KrakenSimulator(tmp_path,calibration_gap=1.0,poll_interval=0.1)
     sim.start()
     try:
-        assert _wait_for(lambda: sim.doa_path.exists())
-        initial=sim.doa_path.read_text()
+        initial=[]
+        assert _wait_for(lambda: bool(initial.append(_read_initial_doa(sim.doa_path)) or initial[-1]))
+        initial=next(v for v in reversed(initial) if v)
         initial_fields=initial.splitlines()[0].split(',')
         assert len(initial_fields)==377
         assert initial_fields[5]=='UCA' and initial_fields[12]=='GPS'
