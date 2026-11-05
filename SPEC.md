@@ -559,5 +559,5 @@ Python **Dash/Plotly** (the same stack as Kraken's own UI; runs in a browser on 
 # Test/verify command
 
 ```bash
-cd krakenlink && python -m pytest -q tests && (command -v pio >/dev/null && pio run -d firmware/esp32_link || echo "pio not installed: firmware build SKIPPED")
+cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && (command -v pio >/dev/null && pio run -d firmware/esp32_link || echo "pio not installed: firmware build SKIPPED")
 ```
