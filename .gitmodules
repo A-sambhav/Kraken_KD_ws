@@ -1,3 +1,0 @@
-[submodule "krakensdr_doa"]
-	path = krakensdr_doa
-	url = https://github.com/krakenrf/krakensdr_doa.git
