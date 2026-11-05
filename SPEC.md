@@ -545,16 +545,16 @@ Python **Dash/Plotly** (the same stack as Kraken's own UI; runs in a browser on 
 
 # Acceptance criteria (Phase 2 — checked by reviewer)
 
-- [ ] `krakenlink/proto`: frame codec + CRC-16/CCITT-FALSE + all §4 messages; `"123456789"` → `0x29B1`; all frames ≤ 128 B.
-- [ ] `krakenlink/proto/validate.py`: every §5 rule; never emits keys outside the whitelist; center written in MHz, VFOs in Hz.
-- [ ] CSV parser handles F5/F6/F7 (partial reads, 360→0, spectrum rotation + 5° max-pool).
-- [ ] Bridge: §6 atomic write + consumed check; §7 state machines; idempotent cmd cache; token-bucket limiter with the 1250 B/s hard cap (MAVLink) and priority order; CSV logger; survives link loss and Kraken restarts.
-- [ ] Transports: MAVLink TUNNEL (comp 191, HEARTBEAT, payload_type 0xA700), ESP-NOW-UART (COBS), loopback; same app frames on all.
-- [ ] systemd unit + `config.example.toml`.
-- [ ] Simulator: file + HTTP output, emulated watcher, calibration gap, crash-on-invalid mode.
-- [ ] Ground app: compass, trends, link stats with link age / last good packet, settings panel with ACK states, POSE map, transport selectable.
-- [ ] ESP32 firmware builds for AIR and GROUND roles; CRC check, counters, COBS UART.
-- [ ] Unit + integration tests from §10.1 and the loopback/simulator parts of §10.2 pass, including the 10 000-command fuzz with zero simulator crashes.
+- [x] `krakenlink/proto`: frame codec + CRC-16/CCITT-FALSE + all §4 messages; `"123456789"` → `0x29B1`; all frames ≤ 128 B.
+- [x] `krakenlink/proto/validate.py`: every §5 rule; never emits keys outside the whitelist; center written in MHz, VFOs in Hz.
+- [x] CSV parser handles F5/F6/F7 (partial reads, 360→0, spectrum rotation + 5° max-pool).
+- [x] Bridge: §6 atomic write + consumed check; §7 state machines; idempotent cmd cache; token-bucket limiter with the 1250 B/s hard cap (MAVLink) and priority order; CSV logger; survives link loss and Kraken restarts.
+- [x] Transports: MAVLink TUNNEL (comp 191, HEARTBEAT, payload_type 0xA700), ESP-NOW-UART (COBS), loopback; same app frames on all.
+- [x] systemd unit + `config.example.toml`.
+- [x] Simulator: file + HTTP output, emulated watcher, calibration gap, crash-on-invalid mode.
+- [x] Ground app: compass, trends, link stats with link age / last good packet, settings panel with ACK states, POSE map, transport selectable.
+- [x] ESP32 firmware builds for AIR and GROUND roles; CRC check, counters, COBS UART.
+- [x] Unit + integration tests from §10.1 and the loopback/simulator parts of §10.2 pass, including the 10 000-command fuzz with zero simulator crashes.
 
 # Test/verify command
 

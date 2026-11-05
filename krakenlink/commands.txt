@@ -1,0 +1,30 @@
+KrakenLink bench demo (no hardware needed)
+==========================================
+Run each step in its OWN terminal, in this order, starting from:
+    cd ~/Storage/Kraken_KD_ws/krakenlink
+
+1) Terminal 1: fake Kraken (simulator)
+    python -m krakenlink.sim --directory bench/share --port 18081 --calibration-gap 3
+
+2) Terminal 2: bridge daemon (the part that runs on the Pi)
+    python -m krakenlink.bridge --config bridge.bench.toml
+
+3) Terminal 3: ground station app
+    python -m krakenlink.ground --config ground.example.toml
+
+4) Open in a browser:
+    http://127.0.0.1:8050
+
+Things to try
+-------------
+- Settings panel: set the center frequency to 433500000 Hz.
+  The command shows accepted, then done after about 4 s (simulated calibration).
+- Link loss: press Ctrl+C in terminal 2. The link panel goes DEGRADED, then LOST.
+  Rerun step 2 and it comes back UP.
+- Kraken down: press Ctrl+C in terminal 1. The Kraken state goes STALE, then DOWN.
+  Rerun step 1 and data resumes.
+
+Stop everything: press Ctrl+C in each terminal (3, then 2, then 1).
+
+Optional: run the tests
+    PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests
