@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "krakenlink"
+version = "0.1.0"
+description = "KLF v1 protocol primitives and local KrakenSDR simulator"
+requires-python = ">=3.9"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["krakenlink*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
