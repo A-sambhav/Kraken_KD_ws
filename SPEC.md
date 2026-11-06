@@ -497,6 +497,40 @@ Python **Dash/Plotly** (the same stack as Kraken's own UI; runs in a browser on 
 - Map: drone position/heading from POSE, plus bearing lines from the drone (Plotly scattermapbox with open tiles; works offline with no tiles).
 - Transport selected by config: `mavlink` (UDP from `mavlink-router`), `espnow` (serial port), `loopback`.
 
+### 12.1 Visual style (v0.2): match the official KrakenSDR web UI look
+
+Reference: `krakensdr_doa/_ui/_web_interface/assets/style.css`, `views/main.py`, `kraken_web_doa.py`.
+Recreate the *look* with our own CSS in `krakenlink/krakenlink/ground/assets/style.css`
+(Dash auto-loads `assets/`). Do **not** copy Kraken's logo image or text branding; the title is "KrakenLink Ground".
+
+- **Theme:** body background `#000000`, text `#ffffff`, font `'Montserrat', sans-serif` with fallback
+  (no external font fetch; the field laptop may be offline), base size 17px.
+- **Header:** centered title, then a row of tab links (`Status`, `DoA Estimation`, `Settings`, `Map`):
+  white text, `0.1em solid #ffffff` border; active tab and hover = background `#f39c12`.
+  Tabs switch pages client-side (dcc.Tabs or a dcc.Location router); the refresh interval keeps running on every page.
+- **Cards:** black, `0.1em solid #ffffff` border, radius `0.2em`, padding 20px, margin 10px, width 400px,
+  floated left; full-width below 1072px. Card titles are `h2`.
+- **Field rows:** label (225px) + value (165px) like Kraken's `.field/.field-label/.field-body`. Status values
+  coloured: OK/UP green `#7ccc63`, DEGRADED/STALE/CALIBRATING orange `#f39c12`, LOST/DOWN/NACK red `#e74c3c`.
+- **Inputs/dropdowns:** black background, white text, `1px solid #bdc3c7` border, height 33px.
+- **Buttons:** `.btn` green `#7ccc63`, black text, 20px; hover `#f39c12`. Stop/destructive actions red `#e74c3c`;
+  "Request snapshot" grey `#bdc3c7`.
+- **Plots:** `template="plotly_dark"`, `paper_bgcolor`/`plot_bgcolor` `rgba(0,0,0,0)`.
+  DoA plot = Kraken's "Compass" style: `Scatterpolar` with `fill="toself"` for the spectrum, angular axis
+  `rotation=90, direction="clockwise"`, plus the bearing as a line/marker. A "MAX DOA Angle: N°" field above
+  the plot like Kraken's DoA page; plot height ~80vh on the DoA page.
+
+**Page content**
+- **Status:** cards "Link Status" (state, link age, last good packet, loss %, frames/s, B/s, RTT, rx_bad, switch advised),
+  "Kraken Status" (from STATUS: kraken_state, bridge_state, center freq MHz, gain dB, active VFOs, DOA method,
+  data age, CPU temp/load, uptime, last command), "Latest DoA" (per VFO: bearing rel/abs, confidence, RSSI, freq MHz).
+- **DoA Estimation:** MAX DOA Angle field + big compass plot + RSSI/confidence trend plot below.
+- **Settings:** cards like Kraken's config page: "RF Receiver" (center freq MHz input, gain dropdown), "VFO"
+  (index, freq MHz, bandwidth Hz, squelch dB, active VFOs, output VFO), "DoA Configuration" (method, array type,
+  array radius/spacing m, DOA enable), "Telemetry" (DOA Hz, spectrum Hz), "Current Settings" (snapshot) and a
+  command table. UI shows MHz/m, converts to Hz/mm for the command encoders.
+- **Map:** the existing map figure in a dark theme.
+
 ## 13. Bridge runtime
 
 - Python ≥ 3.9, deps: `pymavlink`, `pyserial`, `tomli` (on 3.9/3.10). No numpy needed on the bridge (360 → 72 pooling in pure Python is trivial).
