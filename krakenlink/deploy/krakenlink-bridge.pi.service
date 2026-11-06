@@ -1,0 +1,19 @@
+# Install on the Pi (only after the bench test passes):
+#   sudo cp ~/krakenlink/deploy/krakenlink-bridge.pi.service /etc/systemd/system/krakenlink-bridge.service
+#   sudo systemctl daemon-reload && sudo systemctl enable --now krakenlink-bridge
+# Runs as root because Kraken's settings.json is root-owned.
+[Unit]
+Description=KrakenLink bridge (Kraken DOA -> MAVLink TUNNEL)
+After=krakensdr.service
+Wants=krakensdr.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/krakenrf/krakenlink
+ExecStart=/home/krakenrf/krakenlink/.venv/bin/python -m krakenlink.bridge --config /home/krakenrf/krakenlink/deploy/bridge.mavlink.toml
+Nice=10
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

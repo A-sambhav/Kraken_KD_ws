@@ -1,0 +1,13 @@
+# Laptop-side config for Transport A. MAVProxy owns the ground radio and fans out UDP:
+#   udp 14550 -> QGroundControl,  udp 14551 -> this ground app.
+[app]
+host = "127.0.0.1"
+port = 8050
+
+[transport]
+type = "mavlink"
+connection = "udpin:127.0.0.1:14551"
+target_system = 1               # the Cube's SYSID_THISMAV
+
+[display]
+array_offset_cfg = 0            # angle of antenna element 0 relative to the drone's nose (degrees)

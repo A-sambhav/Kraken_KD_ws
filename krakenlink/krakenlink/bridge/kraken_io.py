@@ -9,10 +9,17 @@ class KrakenIO:
         self.poll_interval=poll_interval; self.partial_retry=partial_retry; self.stale_s=stale_s; self.down_s=down_s
         self.consumed_timeout=consumed_timeout; self.writer=writer; self.log=logger or (lambda *a,**k:None)
         self.last_mtime=None; self.samples=[]; self.last_data_mono=None; self.partial_reads=0; self._lock=threading.RLock()
-    def settings(self):
-        with self.settings_path.open(encoding='utf-8') as f: value=json.load(f)
-        if not isinstance(value,dict): raise ValueError('settings root must be object')
-        return value
+    def settings(self, retries=5, retry_delay=.02):
+        # Kraken rewrites settings.json in place (not atomically), so a read can land on a
+        # half-written file. Retry briefly before treating Kraken as down.
+        for attempt in range(retries):
+            try:
+                with self.settings_path.open(encoding='utf-8') as f: value=json.load(f)
+                if not isinstance(value,dict): raise ValueError('settings root must be object')
+                return value
+            except (OSError,ValueError):
+                if attempt==retries-1: raise
+                time.sleep(retry_delay)
     def poll(self):
         try: mtime=self.doa_path.stat().st_mtime_ns
         except OSError: return []

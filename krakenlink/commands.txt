@@ -28,3 +28,29 @@ Stop everything: press Ctrl+C in each terminal (3, then 2, then 1).
 
 Optional: run the tests
     PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests
+
+
+LAN test against the REAL Kraken on the Pi (no radio needed)
+=============================================================
+Pi is 192.168.50.5 (user krakenrf). Laptop must be 192.168.50.226
+(edit "host" in bridge.lan.toml on the Pi if the laptop IP changes).
+
+1) On the Pi (ssh krakenrf@192.168.50.5):
+    cd ~/krakenlink
+    sudo .venv/bin/python -m krakenlink.bridge --config bridge.lan.toml
+
+2) On the laptop:
+    cd ~/Storage/Kraken_KD_ws/krakenlink
+    python -m krakenlink.ground --config ground.lan.toml
+
+3) Open http://127.0.0.1:8050
+   Note: DOA/compass stay empty until a signal opens the VFO squelch
+   (VFO 0 squelch is Manual -80 dB in Kraken).
+
+Stop the bridge on the Pi:
+    sudo pkill -f "^\.venv/bin/python -m krakenlink.bridge"
+
+
+915 MHz telemetry (once the Cube + radios are connected)
+=========================================================
+See deploy/TELEMETRY_915.md for wiring, Cube parameters and run steps.

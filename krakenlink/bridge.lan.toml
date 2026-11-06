@@ -1,0 +1,25 @@
+# Pi-side bench config: real Kraken files, link to the ground laptop over WiFi/LAN (no radio).
+# Run on the Pi as root (Kraken's files are root-owned):
+#   sudo ~/krakenlink/.venv/bin/python -m krakenlink.bridge --config ~/krakenlink/bridge.lan.toml
+daq_fs = 2400000
+
+[kraken]
+share = "/home/krakenrf/krakensdr_doa/krakensdr_doa/_share"
+
+[transport]
+type = "loopback"
+host = "192.168.50.226"   # ground laptop IP
+port = 14570
+bind_host = "0.0.0.0"
+bind_port = 14561
+
+[rate]
+bytes_per_second = 625
+
+[commands]
+calibration_timeout = 30.0
+calib_settle_s = 1.0
+retune_vfo_policy = "reject"
+
+[logging]
+directory = "/home/krakenrf/krakenlink/logs"

@@ -1,0 +1,14 @@
+# Laptop-side config for the LAN test against the bridge on the Pi (192.168.50.5).
+[app]
+host = "127.0.0.1"
+port = 8050
+
+[transport]
+type = "loopback"
+host = "192.168.50.5"
+port = 14561
+bind_host = "0.0.0.0"
+bind_port = 14570
+
+[display]
+array_offset_cfg = 0

@@ -1,0 +1,32 @@
+# Pi-side config for Transport A: MAVLink TUNNEL through the Cube Orange and the 915 MHz telemetry radio.
+# Assumes the Cube is connected to the Pi by USB. Using the by-id path keeps it stable across reboots;
+# run `ls /dev/serial/by-id/` on the Pi once the Cube is plugged in and paste the "-if00" entry below.
+daq_fs = 2400000
+
+[kraken]
+share = "/home/krakenrf/krakensdr_doa/krakensdr_doa/_share"
+
+[transport]
+type = "mavlink"
+connection = "/dev/ttyACM0"     # e.g. /dev/serial/by-id/usb-CubePilot_CubeOrange_XXXX-if00
+baud = 115200                   # ignored over USB; set 921600 if you switch to TELEM2 -> GPIO UART (/dev/ttyAMA0)
+source_system = 1               # must equal the Cube's SYSID_THISMAV
+source_component = 191
+
+[fc]
+connection = "/dev/ttyACM0"     # same device: the bridge shares one connection for FC position/heading
+
+[rate]
+# 625 B/s = 5 kbps. Typical SiK-style radio at 64 kbps air speed leaves room for normal flight telemetry.
+# Hard cap in code: 1250 B/s. Lower this if QGC telemetry gets choppy with the bridge on (SPEC section 9, S3).
+bytes_per_second = 625
+doa_hz = 5
+spectrum_hz = 1
+
+[commands]
+calibration_timeout = 30.0
+calib_settle_s = 1.0
+retune_vfo_policy = "reject"
+
+[logging]
+directory = "/home/krakenrf/krakenlink/logs"

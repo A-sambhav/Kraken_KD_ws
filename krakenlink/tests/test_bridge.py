@@ -277,3 +277,15 @@ def test_command_worker_observes_samples_without_polling_and_uses_daq_window():
     worker.handle(CommandMessage(1,1,struct.pack('<I',433001000)))
     assert wait_for(lambda:any(a and a.result==1 for a in [worker.last_ack]),1)
     assert k.poll_calls==0
+
+
+def test_settings_read_retries_partial_write(tmp_path):
+    """Kraken rewrites settings.json non-atomically; a transient partial file must not read as KRAKEN_DOWN."""
+    import json, threading, time as _t
+    from krakenlink.bridge.kraken_io import KrakenIO
+    p = tmp_path / 'settings.json'
+    p.write_text('{"center_freq": 4')  # half-written
+    def finish():
+        _t.sleep(0.03); p.write_text(json.dumps({'center_freq': 433.0}))
+    threading.Thread(target=finish).start()
+    assert KrakenIO(tmp_path).settings()['center_freq'] == 433.0
