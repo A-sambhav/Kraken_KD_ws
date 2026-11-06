@@ -1,0 +1,24 @@
+# Pi-side config for Transport B: air ESP32 on a UART. Two options:
+#  - ESP32 USB cable to the Pi: use its /dev/serial/by-id/... path (simplest).
+#  - Pi 5 GPIO14/15 to ESP32 GPIO16/17: add "dtparam=uart0=on" to /boot/firmware/config.txt, reboot, use /dev/ttyAMA0.
+daq_fs = 2400000
+
+[kraken]
+share = "/home/krakenrf/krakensdr_doa/krakensdr_doa/_share"
+
+[transport]
+type = "espnow_uart"
+port = "/dev/ttyAMA0"
+baud = 460800
+
+[rate]
+bytes_per_second = 2500   # ESP-NOW has far more headroom than MAVLink (cap 6250 B/s in code)
+doa_hz = 5
+spectrum_hz = 1
+
+[commands]
+calibration_timeout = 30.0
+calib_settle_s = 1.0
+
+[logging]
+directory = "/home/krakenrf/krakenlink/logs"

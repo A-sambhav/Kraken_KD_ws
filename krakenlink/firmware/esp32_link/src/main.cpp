@@ -17,7 +17,8 @@ static constexpr uint8_t ROLE_ID =
   1;
 #endif
 static const uint8_t peerMac[6] = PEER_MAC;
-static HardwareSerial &host =
+// Stream covers both HardwareSerial (UART) and HWCDC (ESP32-S3 native USB).
+static Stream &host =
 #ifdef ROLE_AIR
   Serial2;
 #else
@@ -84,7 +85,7 @@ static void handleHostFrame(const uint8_t *encoded, size_t len) {
 void setup() {
 #ifdef ROLE_AIR
   Serial.begin(115200);
-  host.begin(AIR_UART_BAUD, SERIAL_8N1, AIR_UART_RX_PIN, AIR_UART_TX_PIN);
+  Serial2.begin(AIR_UART_BAUD, SERIAL_8N1, AIR_UART_RX_PIN, AIR_UART_TX_PIN);
 #else
   Serial.begin(UART_BAUD);
 #endif

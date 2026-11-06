@@ -1,7 +1,7 @@
 import struct
 from krakenlink.ground.link import GroundLink
 from krakenlink.ground.commands import CommandClient
-from krakenlink.ground.app import absolute_bearing, create_app, build_compass_figure, build_trends_figure, build_map_figure
+from krakenlink.ground.app import absolute_bearing, create_app, build_compass_figure, build_trends_figure, build_map_figure, status_color, status_names, mhz_to_hz, metres_to_mm
 from krakenlink.proto.frame import Frame, decode_frame
 from krakenlink.proto.messages import DOAMessage, PongMessage, AckMessage, SettingsMessage
 
@@ -41,6 +41,35 @@ def test_app_builds_without_server():
     app=create_app(GroundLink(),CommandClient(lambda frame:None))
     assert app.layout is not None
 
+    def walk(node):
+        if isinstance(node,(list,tuple)):
+            for child in node: yield from walk(child)
+        elif hasattr(node,'children'):
+            yield node
+            yield from walk(node.children)
+    tabs=next(x for x in walk(app.layout) if getattr(x,'id',None)=='pages')
+    assert [x.label for x in tabs.children]==['Status','DoA Estimation','Settings','Map']
+
+def test_ui_conversions_and_status_colors():
+    assert mhz_to_hz(433.125)==433_125_000
+    assert mhz_to_hz(100.0)==100_000_000
+    assert metres_to_mm(.125)==125
+    assert metres_to_mm(1.5)==1500
+    for status in ('UP','OK'): assert status_color(status)=='#7ccc63'
+    for status in ('DEGRADED','STALE','CALIBRATING'): assert status_color(status)=='#f39c12'
+    for status in ('LOST','DOWN'): assert status_color(status)=='#e74c3c'
+
+def test_status_display_mappings():
+    assert status_names(0, 0, 0, 3661, 12, 1) == {
+        'kraken_state': 'OK', 'bridge_state': 'RUNNING', 'doa_method': 'Bartlett',
+        'uptime': '1:01:01', 'last_command': 'id 12 · DONE',
+    }
+    assert status_names(4, 2, 5, 59, 0, 4)['kraken_state'] == 'FORMAT_WRONG'
+    assert status_names(4, 2, 5, 59, 0, 4)['bridge_state'] == 'WAIT_KRAKEN'
+    assert status_names(4, 2, 5, 59, 0, 4)['doa_method'] == 'ROOT-MUSIC'
+    assert status_names(9, 8, 99, 59, 0, 99)['bridge_state'] == 'UNKNOWN(8)'
+    assert status_names(9, 8, 99, 59, 0, 99)['doa_method'] == 'UNKNOWN(99)'
+
 def test_app_figures_render_synthetic_ground_frames():
     from krakenlink.proto.messages import SpectrumMessage, PoseMessage
     g=GroundLink(wall_clock=lambda:1000)
@@ -48,12 +77,21 @@ def test_app_figures_render_synthetic_ground_frames():
     g.receive(Frame(2,1,SpectrumMessage(1,2,10,bytes(range(72))).encode()).encode())
     g.receive(Frame(4,2,PoseMessage(1,100000000,200000000,5,0,0,3,8).encode()).encode())
     compass=build_compass_figure(g,{'array_offset_cfg':10})
+    assert compass.layout.paper_bgcolor=='rgba(0,0,0,0)'
+    assert compass.layout.polar.angularaxis.direction=='clockwise'
+    assert compass.layout.polar.angularaxis.rotation==90
+    assert compass.layout.plot_bgcolor=='rgba(0,0,0,0)'
+    assert compass.layout.template.layout.paper_bgcolor=='rgb(17,17,17)'
     assert any(t.name=='VFO 1 absolute now' and list(t.theta)==[280] for t in compass.data)
     assert any(t.name.startswith('Spectrum') and len(t.r)==72 for t in compass.data)
+    assert next(t for t in compass.data if t.name.startswith('Spectrum')).fill=='toself'
     trends=build_trends_figure(g)
     assert any('RSSI' in t.name and list(t.y)==[-10.0] for t in trends.data)
     mapfig=build_map_figure(g)
-    assert len(mapfig.data)==2 and mapfig.data[0].lat[0]==10
+    assert len(mapfig.data)==2 and mapfig.data[0].y[0]==10
+    assert mapfig.layout.xaxis.scaleanchor == 'y'
+    empty_map=build_map_figure(type('L',(),{'pose':None,'last_good_doa':None})())
+    assert empty_map.layout.annotations[0].text == 'No position from flight controller yet'
 
 def test_ping_sequence_increments():
     g=GroundLink()

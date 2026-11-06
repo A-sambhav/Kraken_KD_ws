@@ -1,0 +1,12 @@
+# Laptop-side config for Transport B: ESP32-S3-N16R8 ground radio on its "COM" (CH343 UART) USB port.
+[app]
+host = "127.0.0.1"
+port = 8050
+
+[transport]
+type = "espnow"
+port = "/dev/serial/by-id/usb-1a86_USB_Single_Serial_5CBB028884-if00"   # stable name for /dev/ttyACM0
+baudrate = 460800
+
+[display]
+array_offset_cfg = 0

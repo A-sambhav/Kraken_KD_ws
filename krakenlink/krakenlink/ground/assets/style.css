@@ -1,0 +1,45 @@
+* { box-sizing: border-box; }
+body { margin: 0; background: #000; color: #fff; font: 17px 'Montserrat', sans-serif; }
+header { text-align: center; padding: 18px 12px 4px; }
+header h1 { font-size: 2rem; margin: 0 0 14px; }
+.tabs { color: #fff; }
+.tabs .tab { color: #fff !important; border: .1em solid #fff !important; background: #000 !important; padding: 12px 20px !important; }
+.tabs .tab:hover, .tabs .tab--selected { background: #f39c12 !important; color: #000 !important; }
+.card { background: #000; border: .1em solid #fff; border-radius: .2em; padding: 20px; margin: 10px; width: 400px; float: left; }
+.card h2 { font-size: 1.35rem; margin: 0 0 18px; }
+.doa-card { width: calc(100% - 20px); }
+.doa-card .js-plotly-plot { height: 80vh; }
+.map-card { width: calc(100% - 20px); }
+.map-card .js-plotly-plot { height: 70vh; }
+.vfo-heading { font-size: 1.05rem; margin: 16px 0 4px; }
+.field { display: flex; align-items: center; gap: 8px; margin: 9px 0; min-height: 33px; }
+.field-label { width: 225px; flex: 0 0 225px; }
+.field-value { width: 165px; overflow-wrap: anywhere; }
+input, .Select-control, .Select-menu-outer, .Select-value-label,
+.dash-dropdown { background: #000 !important; color: #fff !important; border: 1px solid #bdc3c7 !important; min-height: 33px; }
+input { padding: 5px; }
+input[type=number] { appearance: textfield; -moz-appearance: textfield; }
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; appearance: none; margin: 0; }
+/* Dash 4 uses dash-dropdown classes; retain selectors for Dash's older react-select DOM. */
+.dash-dropdown-wrapper, .dash-dropdown-trigger, .dash-dropdown-content,
+.dash-dropdown-options, .dash-dropdown-option, .dash-dropdown-search,
+.Select-menu-outer, .Select-option { background: #000 !important; color: #fff !important; }
+.dash-dropdown-placeholder, .Select-placeholder { color: #bdc3c7 !important; }
+.dash-dropdown-options, .dash-dropdown-content, .Select-menu-outer { border: 1px solid #bdc3c7 !important; }
+.dash-dropdown-option:hover, .dash-dropdown-option[aria-selected=true],
+.Select-option:hover, .Select-option.is-focused, .Select-option.is-selected { background: #f39c12 !important; color: #000 !important; }
+.dash-dropdown-option:hover *, .dash-dropdown-option[aria-selected=true] * { color: #000 !important; }
+.dash-dropdown-search::placeholder { color: #bdc3c7 !important; }
+.dash-checklist label, .dash-radioitems label, .dash-checklist label span,
+.dash-radioitems label span { color: #ffffff !important; display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; }
+.dash-checklist, .dash-radioitems { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+button.btn { background: #7ccc63; color: #000; border: 0; border-radius: 3px; padding: 8px 14px; margin: 5px; font-size: 17px; cursor: pointer; }
+button.btn:hover { background: #f39c12; }
+button.btn.destructive { background: #e74c3c; }
+button.btn.snapshot { background: #bdc3c7; }
+.card pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+table { width: 100%; border-collapse: collapse; }
+th, td { border-bottom: 1px solid #bdc3c7; text-align: left; padding: 6px; }
+.tabs-container, .tab-content { overflow: auto; }
+@media (max-width: 1072px) { .card { float: none; width: calc(100% - 20px); } .field-label { flex-basis: 45%; width: 45%; } .field-value { width: auto; } }
