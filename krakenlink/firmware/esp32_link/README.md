@@ -18,10 +18,13 @@ Pi UART to ESP32 pins while using the ground USB serial arrangement.
 
 ## Pairing and channel
 
-Edit `include/config.h` on both units. Set `PEER_MAC` to the other ESP32's
-station MAC, and use the same `ESPNOW_CHANNEL` on both. The file also contains
-the air UART pin/baud settings and the optional `ENABLE_BROADCAST_PAIRING`
-switch. Type `0x7F` is local status and is never sent over ESP-NOW.
+Pairing is automatic. Both boards must use the same `NET_ID` (default
+`0x4B4C4E31`, ASCII `KLN1`) and `ESPNOW_CHANNEL` (default 1); boards with
+opposite roles discover one another over broadcast beacons, then save the peer
+MAC in NVS for reconnects. Set `FORCE_PEER_MAC` only when discovery should be
+disabled. The S3 builds use the onboard RGB LED: blue blinking at 2 Hz means
+searching, solid green means paired, and red flashes indicate a transmit
+failure. Type `0x7F` is local status and is never sent over ESP-NOW.
 
 ## Build and flash
 

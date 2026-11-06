@@ -1,14 +1,10 @@
 #pragma once
 
-// MAC address of the OTHER board in the pair.
-// Ground board: ESP32-S3-N16R8, MAC 7c:4f:ad:bb:67:54 (read 2026-11-06).
-// Air board:    ESP32-S3-N16R8, MAC 7c:4f:ad:b6:a1:34 (read 2026-11-06).
-#ifdef ROLE_AIR
-#define PEER_MAC {0x7C, 0x4F, 0xAD, 0xBB, 0x67, 0x54}   // ground S3
-#else
-#define PEER_MAC {0x7C, 0x4F, 0xAD, 0xB6, 0xA1, 0x34}   // air S3
-#endif
+#define NET_ID 0x4B4C4E31UL
 #define ESPNOW_CHANNEL 1
+
+// Optional fixed peer: define FORCE_PEER_MAC as six comma-separated bytes.
+// Example: -DFORCE_PEER_MAC=0x01,0x02,0x03,0x04,0x05,0x06
 
 // Air-side host UART. Pi TX -> ESP32 RX (GPIO16), Pi RX <- ESP32 TX (GPIO17).
 #define AIR_UART_RX_PIN 16
@@ -16,9 +12,7 @@
 #define AIR_UART_BAUD 460800
 #define UART_BAUD 460800
 
-// Optional pairing fallback sends to broadcast when the configured peer is absent.
-#define ENABLE_BROADCAST_PAIRING 0
 #define USE_LR_MODE 0
-
 #define UART_FRAME_MAX 130
 #define TX_QUEUE_DEPTH 8
+#define RX_QUEUE_DEPTH 16
