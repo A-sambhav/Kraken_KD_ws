@@ -1,6 +1,6 @@
-# Pi-side config for Transport B: air ESP32 on a UART. Two options:
-#  - ESP32 USB cable to the Pi: use its /dev/serial/by-id/... path (simplest).
-#  - Pi 5 GPIO14/15 to ESP32 GPIO16/17: add "dtparam=uart0=on" to /boot/firmware/config.txt, reboot, use /dev/ttyAMA0.
+# Pi-side config for Transport B: air ESP32-S3 (MAC 7c:4f:ad:b6:a1:34, firmware env air_s3)
+# plugged into the Pi by its "COM" USB port. The by-id path survives reboots and other USB devices.
+# (Alternative: GPIO wiring with firmware env "air" and port /dev/ttyAMA0 after dtparam=uart0=on.)
 daq_fs = 2400000
 
 [kraken]
@@ -8,7 +8,7 @@ share = "/home/krakenrf/krakensdr_doa/krakensdr_doa/_share"
 
 [transport]
 type = "espnow_uart"
-port = "/dev/ttyAMA0"
+port = "/dev/serial/by-id/usb-1a86_USB_Single_Serial_5CBB029928-if00"   # shows as /dev/ttyACM0
 baud = 460800
 
 [rate]

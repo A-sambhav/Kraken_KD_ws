@@ -18,8 +18,9 @@ static constexpr uint8_t ROLE_ID =
 #endif
 static const uint8_t peerMac[6] = PEER_MAC;
 // Stream covers both HardwareSerial (UART) and HWCDC (ESP32-S3 native USB).
+// Air side defaults to Serial2 on GPIO pins; define AIR_HOST_USB to talk to the Pi over the USB serial port.
 static Stream &host =
-#ifdef ROLE_AIR
+#if defined(ROLE_AIR) && !defined(AIR_HOST_USB)
   Serial2;
 #else
   Serial;
@@ -83,7 +84,7 @@ static void handleHostFrame(const uint8_t *encoded, size_t len) {
 }
 
 void setup() {
-#ifdef ROLE_AIR
+#if defined(ROLE_AIR) && !defined(AIR_HOST_USB)
   Serial.begin(115200);
   Serial2.begin(AIR_UART_BAUD, SERIAL_8N1, AIR_UART_RX_PIN, AIR_UART_TX_PIN);
 #else

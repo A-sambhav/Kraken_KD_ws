@@ -2,11 +2,11 @@
 
 // MAC address of the OTHER board in the pair.
 // Ground board: ESP32-S3-N16R8, MAC 7c:4f:ad:bb:67:54 (read 2026-11-06).
-// Air board: not set up yet -> replace the placeholder with its MAC (esptool.py read_mac).
+// Air board:    ESP32-S3-N16R8, MAC 7c:4f:ad:b6:a1:34 (read 2026-11-06).
 #ifdef ROLE_AIR
 #define PEER_MAC {0x7C, 0x4F, 0xAD, 0xBB, 0x67, 0x54}   // ground S3
 #else
-#define PEER_MAC {0x24, 0x6F, 0x28, 0x00, 0x00, 0x01}   // TODO: air board MAC
+#define PEER_MAC {0x7C, 0x4F, 0xAD, 0xB6, 0xA1, 0x34}   // air S3
 #endif
 #define ESPNOW_CHANNEL 1
 

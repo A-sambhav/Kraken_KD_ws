@@ -409,6 +409,43 @@ On-air size per frame = MAVLink2 header 10 + checksum 2 + TUNNEL fixed fields 5
 - Range: to get past the Pi's onboard WiFi at 60–80 m, use an ESP32 module with an **external antenna** (u.FL), and optionally ESP32 **Long Range (LR) mode** on both ends (config flag; trades rate for sensitivity).
 - The ESP32 firmware forwards opaque frames. It **does not** parse app messages, but checks the KLF CRC on both sides and counts errors. On boot, a link-status frame (`type 0x7F`, local only, never forwarded) reports the ESP32's RSSI, retries, and drops to the host about 1 Hz.
 
+### 8.3 ESP-NOW automatic pairing (v0.3) — no MACs in code, no manual steps
+
+Goal: power on both boards (any order, any time) and they connect by themselves within ~2 s; a replaced
+board pairs automatically; a reboot of either side reconnects without user action.
+
+- **Network ID:** `NET_ID` (u32, `include/config.h`, default `0x4B4C4E31` "KLN1"). Only boards with the same
+  NET_ID and **opposite role** pair. Remove the compiled `PEER_MAC`; keep an optional `FORCE_PEER_MAC`
+  override (when defined, discovery is skipped).
+- **Beacon** (ESP-NOW broadcast to `FF:FF:FF:FF:FF:FF`, broadcast peer added at init), 12 bytes:
+  `"KLP" (3 B) | ver u8 = 1 | role u8 (0 air, 1 ground) | flags u8 (b0 paired) | net_id u32 LE | crc16 u16 LE`
+  (CRC-16/CCITT-FALSE over the first 10 bytes). Never starts with `0xA7`, so it can't be confused with a KLF
+  frame. Beacons are **never forwarded** to the host.
+  Rate: every 500 ms while SEARCHING, every 2 s while PAIRED (doubles as keepalive).
+- **Pairing state machine** (pure C++ in `lib/klf/pairing.{h,cpp}`, no Arduino dependency, time passed in):
+  - States: `SEARCHING`, `PAIRED`.
+  - Boot: load the saved peer MAC from NVS (Arduino `Preferences`, namespace `klink`). If present → add it as
+    unicast peer and start in `SEARCHING` (switches to `PAIRED` on the first beacon/frame from it).
+  - Valid beacon from opposite role + same NET_ID:
+    - no peer, or current peer silent > `PEER_TIMEOUT_MS` (10 000) → adopt sender as peer, save to NVS
+      (only if it changed, to spare flash), → `PAIRED`.
+    - sender == current peer → refresh last-heard, → `PAIRED`.
+    - different sender while current peer is alive → ignore (count `pair_conflicts`).
+  - Any valid KLF frame from the current peer also refreshes last-heard.
+  - Current peer silent > `PEER_TIMEOUT_MS` → `SEARCHING` (keep the peer as a candidate; any matching
+    beacon may replace it).
+  - Frames received from a MAC that is not the current peer are dropped and counted (`rx_foreign`).
+- **Data while SEARCHING with a known peer:** keep unicasting to it. **With no peer:** drop and count `tx_nopeer`.
+- **Status frame 0x7F** payload grows from 22 to 31 bytes (append, backward compatible by length):
+  `... | u8 paired | u8[6] peer_mac | u16 tx_nopeer` (old 22-byte layout unchanged at the front).
+  Python `ESP-NOW` transports must tolerate both lengths and never treat 0x7F as an app message.
+- **Status LED** (optional, `STATUS_LED_RGB_PIN`, default 48 on the S3 envs, undefined on `esp32dev`):
+  blue blink 2 Hz = SEARCHING, solid green = PAIRED, red flash on each tx failure burst. Low brightness (≤ 20/255).
+- **Channel:** both boards fixed on `ESPNOW_CHANNEL` (1).
+- **Tests (native, Unity):** pairing state machine — adopt on first beacon; ignore same role; ignore other NET_ID;
+  ignore bad beacon CRC; refresh on peer beacon; conflict ignored while peer alive; replacement after timeout;
+  boot with saved peer → PAIRED on first frame; beacon encode/decode round trip and length 12.
+
 ---
 
 ## 9. When to switch from MAVLink (A) to ESP-NOW (B)
