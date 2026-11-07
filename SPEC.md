@@ -830,6 +830,81 @@ command with `last_send=None` *before* `_transmit()` sets it, so a concurrent `t
 ### 20.2 Not in scope
 No protocol, bridge or firmware change. No GUI layout change.
 
+## 21. Distribution bundles: `dist/` (v0.8)
+
+Goal: replicate the working system on any new Pi / laptop without the repo. Flash the official KrakenSDR image,
+copy `dist/raspi` to the Pi over ssh and run one script; on the receiver laptop run one script in `dist/ground`;
+flash the ESP32-S3 boards from `dist/esp/air` and `dist/esp/ground` (kept separate from the other two).
+
+`dist/` lives at the repo root and is **generated** by `krakenlink/make_dist.sh` from single-source files below;
+the generated tree is committed so it can be copied as is. Never hand-edit `dist/`.
+
+### 21.1 Sources (edit these) → output
+| Source | Output |
+|---|---|
+| `krakenlink/krakenlink/` (whole package, no `__pycache__`, no `*.pyc`) | `dist/raspi/krakenlink/`, `dist/ground/krakenlink/` |
+| `krakenlink/deploy/krakenimage/{run_bridge.sh,bridge.toml.in,krakenlink-bridge.service.in,install.sh,uninstall.sh,deploy.sh,README.md}` | `dist/raspi/` |
+| `krakenlink/deploy/ground/{install.sh,run_ground.sh,ground.toml.in,requirements.txt,README.md}` | `dist/ground/` |
+| `krakenlink/deploy/esp/{flash.sh,README.md}` | `dist/esp/air/`, `dist/esp/ground/` (same flash.sh; role from the folder name), `dist/esp/README.md` |
+| PlatformIO builds `air_s3`, `ground_s3` (only with `--firmware`) | `dist/esp/{air,ground}/firmware.bin` (merged image, flash at 0x0) |
+| — | `dist/README.md` (overview, the 3 steps, written by make_dist.sh) |
+
+### 21.2 `krakenlink/make_dist.sh [--out DIR] [--firmware]`
+- Default `--out` = `<repo root>/dist`. Recreates `raspi/`, `ground/` and the esp scripts/READMEs from scratch
+  (`rm -rf` only inside the output dir's `raspi`, `ground`, `esp/*/flash.sh`, `esp/*/README.md`, `README.md`).
+- Without `--firmware`: existing `dist/esp/*/firmware.bin` are kept untouched.
+- With `--firmware`: `pio run -d firmware/esp32_link -e air_s3 -e ground_s3`, then for each role merge
+  `bootloader.bin`@0x0, `partitions.bin`@0x8000, `boot_app0.bin`@0xe000
+  (`~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin`), `firmware.bin`@0x10000
+  with `python3 ~/.platformio/packages/tool-esptoolpy/esptool.py --chip esp32s3 merge_bin --flash_mode keep
+  --flash_freq keep --flash_size keep -o <dist>/esp/<role>/firmware.bin ...`. Also writes `firmware.sha256`.
+- Prints what it wrote. `set -euo pipefail`; `--help` works.
+
+### 21.3 `dist/raspi` (runs on the Pi, official KrakenSDR image; folder lives at `~/krakenlink`)
+- `deploy.sh [user@host]` — **run on the laptop** from inside `dist/raspi`: rsync this folder to `~/krakenlink` on
+  the Pi (default `krakenrf@192.168.50.5`; `--delete` but keep the Pi's `logs/` and `bridge.toml`), then
+  `ssh -t <pi> 'bash ~/krakenlink/install.sh'`. Uses plain ssh/rsync (password prompt is fine).
+- `install.sh [--no-service] [--help]` — run on the Pi, installs **in place** (the folder it is in):
+  1. checks: `python3 >= 3.9`; `import serial` (if missing: `sudo apt-get install -y python3-serial`, which is on
+     the Kraken image already); `tomllib` or `tomli` (if neither: `sudo apt-get install -y python3-tomli`);
+  2. warns (not fails) if `/home/krakenrf/krakensdr_doa/krakensdr_doa/_share` is missing or no ESP32 is in
+     `/dev/serial/by-id` ("plug the AIR ESP32 into its COM port");
+  3. `./run_bridge.sh install-service` (unless `--no-service`), then prints `./run_bridge.sh status`.
+  Idempotent (running it twice is fine). Changes nothing outside this folder except the systemd unit.
+- `uninstall.sh` — `./run_bridge.sh remove-service`; leaves the folder.
+- `run_bridge.sh`, `bridge.toml.in`, `krakenlink-bridge.service.in` — as today (deploy/krakenimage).
+- `README.md` — the 3 steps (flash Kraken image → `cd dist/raspi && ./deploy.sh krakenrf@<pi-ip>` → done),
+  day-to-day commands (status/log/restart), what the bundle changes on the Pi.
+
+### 21.4 `dist/ground` (receiver laptop, Ubuntu/Debian, python3 >= 3.9)
+- `requirements.txt` pinned to the versions verified on the bench laptop: `dash==4.5.0`, `plotly==7.1.0`,
+  `pyserial==3.5`, `tomli==2.5.0; python_version < "3.11"`.
+- `install.sh [--help]`: create `.venv` in this folder (`python3 -m venv`; on failure print
+  `sudo apt install python3-venv` and exit 1), `pip install -r requirements.txt`; check the user is in group
+  `dialout` (if not, print `sudo usermod -aG dialout $USER` + "log out and in"; do not run sudo itself);
+  finish with an import check of `krakenlink.ground.app` inside the venv. Idempotent.
+- `run_ground.sh [--port DEV] [--no-browser] [--help]`: pick the GROUND ESP32 port (given, else the first
+  `/dev/serial/by-id/*` matching `1a86` or `Espressif`; none → clear error), render `ground.toml.in` →
+  `ground.toml` (`@GROUND_PORT@`), run `.venv/bin/python -m krakenlink.ground --config ground.toml`, open
+  `http://127.0.0.1:8050` with `xdg-open` after it answers (unless `--no-browser`). Missing `.venv` → "run
+  ./install.sh first".
+- `ground.toml.in`: transport `type = "espnow"`, `port = "@GROUND_PORT@"`, `baudrate = 460800`, app 127.0.0.1:8050,
+  `[display] array_offset_cfg = 0`.
+- `README.md`: install once, run, plug the GROUND ESP32 into its COM port, Settings tab usage (from commands.txt).
+
+### 21.5 `dist/esp/{air,ground}`
+- `flash.sh [--port DEV] [--help]`: role = name of the folder it is in (`air`|`ground`, else error). Port = given,
+  else the only `/dev/serial/by-id/*1a86*` device (0 or >1 → error listing candidates). esptool = `python3 -m
+  esptool` if importable, else create `.venv` here and `pip install esptool==4.8.1`. Verify `firmware.bin`
+  against `firmware.sha256`, then `esptool --chip esp32s3 --port P --baud 460800 write_flash 0x0 firmware.bin`.
+  Missing firmware.bin → "run make_dist.sh --firmware". Hint on failure: hold BOOT, tap RESET, retry.
+- `README.md` (per role and top-level): board = ESP32-S3-N16R8; flash and use via the **COM** (CH343) port;
+  AIR goes on the Pi, GROUND on the laptop; pairing is automatic.
+
+### 21.6 Not in scope
+No change to protocol, bridge/ground Python code, firmware source, or `krakensdr_doa/`. Existing
+`deploy/krakenimage/{run_bridge.sh,...}` behaviour unchanged (only new files added there).
+
 ---
 
 # Acceptance criteria (Phase 2 — checked by reviewer)
@@ -907,4 +982,20 @@ cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && f
 
 ```bash
 cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && git diff --quiet HEAD -- ../krakensdr_doa && echo PHASE6 PASS
+```
+
+# Acceptance criteria (Phase 7 — dist bundles, §21)
+
+- [ ] Source files of §21.1 exist; `krakenlink/make_dist.sh --out <tmp>` (no `--firmware`) produces exactly the §21 layout: `raspi/{krakenlink/,run_bridge.sh,bridge.toml.in,krakenlink-bridge.service.in,install.sh,uninstall.sh,deploy.sh,README.md}`, `ground/{krakenlink/,install.sh,run_ground.sh,ground.toml.in,requirements.txt,README.md}`, `esp/{README.md,air/{flash.sh,README.md},ground/{flash.sh,README.md}}`, `README.md`; no `__pycache__`/`*.pyc` anywhere (pytest).
+- [ ] Every generated `.sh` is executable, passes `bash -n` and `shellcheck -S warning`; `--help` of `make_dist.sh`, `raspi/install.sh`, `raspi/deploy.sh`, `ground/install.sh`, `ground/run_ground.sh`, `esp/air/flash.sh` exits 0 without network, sudo, hardware or side effects (pytest runs them).
+- [ ] `ground.toml.in` rendered with a sample port loads through the ground app's config path and selects the espnow transport with that port (pytest, no serial opened); `bridge.toml.in` rendered loads in the bridge config loader with `transport.type = "espnow_uart"` (pytest).
+- [ ] `ground/run_ground.sh` and `esp/*/flash.sh` port selection is tested with a fake by-id dir (env override `KRAKENLINK_BY_ID`, default `/dev/serial/by-id`): one match → chosen; none → non-zero + message; `flash.sh` with two 1a86 devices → non-zero listing both.
+- [ ] `esp/<role>/flash.sh` derives role from its folder and refuses other folder names (pytest with a copy in a tmp dir named `other`).
+- [ ] `dist/` in the repo is regenerated by `make_dist.sh` and matches a fresh `--out <tmp>` run byte for byte except `esp/*/firmware.bin|firmware.sha256` (pytest).
+- [ ] All earlier tests pass; `krakensdr_doa/` unchanged.
+
+# Test/verify command (Phase 7)
+
+```bash
+cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && { if command -v shellcheck >/dev/null; then shellcheck -S warning make_dist.sh deploy/*/*.sh ../dist/*/*.sh ../dist/esp/*/*.sh; else echo "shellcheck not installed: SKIPPED"; fi; } && git diff --quiet HEAD -- ../krakensdr_doa && echo PHASE7 PASS
 ```
