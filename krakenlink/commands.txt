@@ -1,3 +1,16 @@
+NEW Pi / NEW laptop: use the bundles in dist/ (repo root)
+==========================================================
+  dist/raspi        Pi with the official KrakenSDR image. From the laptop:
+                      cd dist/raspi && ./deploy.sh krakenrf@<pi-ip>
+                    (copies to ~/krakenlink on the Pi, installs the boot service)
+  dist/ground       receiver laptop:  cd dist/ground && ./install.sh   (once)
+                                       ./run_ground.sh                  (each time)
+  dist/esp/air      flash the Pi's ESP32-S3 (COM port):     ./flash.sh
+  dist/esp/ground   flash the laptop's ESP32-S3 (COM port): ./flash.sh
+Rebuild dist/ after changing code:  cd krakenlink && ./make_dist.sh [--firmware]
+Details: dist/README.md and the README in each folder.
+
+
 KrakenLink bench demo (no hardware needed)
 ==========================================
 Run each step in its OWN terminal, in this order, starting from:

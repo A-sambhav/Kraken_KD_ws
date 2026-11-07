@@ -1,0 +1,20 @@
+[Unit]
+Description=KrakenLink bridge (Kraken DOA -> ESP-NOW)
+# No ordering on krakensdr.service: the image orders it After=multi-user.target, so ordering this
+# WantedBy=multi-user.target unit after it is a cycle and systemd drops this unit at boot.
+# The bridge waits for Kraken's files by itself.
+After=network.target
+
+[Service]
+Type=simple
+# Root: Kraken's settings.json is root-owned and ground commands rewrite it.
+User=root
+WorkingDirectory=@HERE@
+ExecStart=@HERE@/run_bridge.sh run
+# Retries until the ESP32 is plugged in and Kraken has written its files.
+Restart=always
+RestartSec=5
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

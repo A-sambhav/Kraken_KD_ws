@@ -46,8 +46,9 @@ case "${1:-status}" in
     if running && ! service_active; then sudo pkill -f "$MATCH"; fi
     sed -e "s|@HERE@|$HERE|g" "$HERE/krakenlink-bridge.service.in" | sudo tee "/etc/systemd/system/$UNIT" >/dev/null
     sudo systemctl daemon-reload
-    sudo systemctl enable --now "$UNIT"
-    echo "installed and started $UNIT (starts on boot)" ;;
+    sudo systemctl enable "$UNIT"
+    sudo systemctl restart "$UNIT"  # restart, not --now: picks up new code when re-installing
+    echo "installed and (re)started $UNIT (starts on boot)" ;;
   remove-service)
     sudo systemctl disable --now "$UNIT" 2>/dev/null || true
     sudo rm -f "/etc/systemd/system/$UNIT"

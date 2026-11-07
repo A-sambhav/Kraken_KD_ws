@@ -1,0 +1,16 @@
+[Unit]
+Description=KrakenLink bridge daemon
+After=network.target krakensdr.service
+
+[Service]
+Type=simple
+User=krakenlink
+Group=dialout
+Nice=10
+ExecStart=/usr/bin/python3 -m krakenlink.bridge --config /etc/krakenlink/config.toml
+WorkingDirectory=/opt/krakenlink
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

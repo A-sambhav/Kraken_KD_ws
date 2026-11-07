@@ -1,0 +1,4 @@
+dash==4.5.0
+plotly==7.1.0
+pyserial==3.5
+tomli==2.5.0; python_version < "3.11"

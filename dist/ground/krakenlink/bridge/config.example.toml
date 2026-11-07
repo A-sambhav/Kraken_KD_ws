@@ -1,0 +1,35 @@
+daq_fs = 2400000
+
+[kraken]
+share = "/home/pi/krakensdr_doa/krakensdr_doa/_share"
+poll_interval = 0.05
+partial_retry = 0.02
+stale_s = 2.0
+down_s = 10.0
+consumed_timeout = 5.0
+settings_writer = "atomic"
+
+[transport]
+type = "mavlink"
+connection = "/dev/serial0"
+baud = 921600
+source_system = 1
+
+[rate]
+bytes_per_second = 625
+spectrum = true
+
+[commands]
+calibration_timeout = 30.0
+calib_settle_s = 1.0
+retune_vfo_policy = "reject"
+
+[fc]
+connection = "/dev/serial0"
+# When this is the same device as [transport].connection, the FC reader shares
+# the transport connection and uses [transport].baud.
+
+[logging]
+directory = "/var/log/krakenlink"
+max_bytes = 524288000
+flush_interval = 1.0

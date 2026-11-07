@@ -1,0 +1,1 @@
+"""KrakenLink shared protocol package."""

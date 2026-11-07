@@ -1,40 +1,27 @@
 # KrakenLink on the official KrakenSDR image
 
-The Pi 5 runs the **official KrakenSDR image** unchanged (its own `krakensdr.service` starts Kraken).
-KrakenLink adds only the bridge, all inside `~/krakenlink` on the Pi, plus one systemd unit
-(`/etc/systemd/system/krakenlink-bridge.service`). No existing file on the image is modified.
+Flash the official KrakenSDR image on the Pi. From a laptop with this bundle, deploy it with:
 
-```
-Kraken (_share/DOA_value.html, settings.json) -> bridge (~/krakenlink) -> AIR ESP32-S3 (USB "COM" port)
-   ~~ ESP-NOW ~~> GROUND ESP32-S3 (laptop USB "COM" port) -> ground app http://127.0.0.1:8050
+```sh
+cd dist/raspi
+./deploy.sh krakenrf@<pi-ip>
 ```
 
-## Files
+The deploy script copies the bundle to `~/krakenlink` and runs its installer. The bridge is installed as a
+systemd service. It uses only files in this folder and adds `/etc/systemd/system/krakenlink-bridge.service`.
 
-| File | Where it runs | What it does |
-|------|---------------|--------------|
-| `push.sh [user@host]` | laptop | rsyncs `krakenlink/` + the files below to `~/krakenlink` on the Pi, restarts the bridge |
-| `run_bridge.sh` | Pi | `run` (foreground, used by systemd), `start`/`stop` (by hand), `status`, `log`, `install-service`, `remove-service` |
-| `bridge.toml.in` | Pi | bridge config; `@AIR_PORT@` is filled from `/dev/serial/by-id` at every start |
-| `krakenlink-bridge.service.in` | Pi | systemd unit, runs as **root** (ground commands rewrite Kraken's root-owned `settings.json`), `Restart=always` (waits for the ESP32 / Kraken) |
+## Day-to-day
 
-## Setup (once)
+```sh
+./run_bridge.sh status
+./run_bridge.sh log
+sudo systemctl restart krakenlink-bridge
+./uninstall.sh
+```
 
-1. Flash the ESP32-S3 boards: `pio run -d firmware/esp32_link -e air_s3 -t upload` (Pi board) and
-   `-e ground_s3` (laptop board). Plug **both into their "COM" (CH343) USB port**, not the native "USB" port.
-2. From the laptop: `deploy/krakenimage/push.sh`
-3. On the Pi: `cd ~/krakenlink && ./run_bridge.sh install-service` (starts now and on every boot).
+The installer checks Python, serial and TOML support, warns if the Kraken share or AIR ESP32 is absent, then
+installs and starts the service. `install.sh --no-service` skips the service step. `uninstall.sh` removes the
+service but leaves this folder and its logs/configuration. The bridge runs as root so ground commands can update
+the Kraken-owned settings file; logs remain under this folder.
 
-## Use
-
-- Laptop: `python3 -m krakenlink.ground --config ground.espnow.toml`, open http://127.0.0.1:8050.
-- Pi: `./run_bridge.sh status` / `./run_bridge.sh log`; `sudo systemctl restart krakenlink-bridge`.
-- After changing code on the laptop: `deploy/krakenimage/push.sh` again.
-
-## Limits
-
-- The bridge runs as root so ground → Pi commands can rewrite Kraken's `settings.json` (same file the Kraken
-  web UI edits). Files in `~/krakenlink` stay owned by `krakenrf`; new CSV logs are root-owned.
-- Kraken writes DOA only when a signal is above the VFO squelch, unless the squelch is set below the noise
-  floor (then you get bearings on noise with very low confidence).
-- The Pi has no time sync off-network; CSV log timestamps use its clock.
+For operation, plug the AIR ESP32 into its CH343 COM port. The bridge detects the port on each start.

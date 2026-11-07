@@ -1,0 +1,11 @@
+[transport]
+type = "espnow"
+port = "@GROUND_PORT@"
+baudrate = 460800
+
+[app]
+host = "127.0.0.1"
+port = 8050
+
+[display]
+array_offset_cfg = 0
