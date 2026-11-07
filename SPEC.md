@@ -697,6 +697,55 @@ but is not used in this deployment.
 
 ---
 
+## 18. Laptop raw-data viewer (v0.5) — "is the KrakenSDR delivering data?"
+
+KrakenSDR plugged into the laptop (Ubuntu 22.04+, x86_64) by USB. One command opens a browser page that
+updates live and shows whether each of the 5 receiver channels is delivering IQ samples. No heimdall, no conda,
+no krakensdr_doa. Each KrakenSDR channel is an RTL2832U (`0bda:2838`) that stock `librtlsdr` can open
+on its own (serials normally `1000`..`1004`).
+
+### 18.1 Files
+- `krakenlink/krakenlink/tools/kraken_view/` (package, `python -m krakenlink.tools.kraken_view`):
+  - `rtl.py` — thin **ctypes** binding to the system `librtlsdr.so.0` (no pyrtlsdr): `get_device_count`,
+    `get_device_usb_strings`, `open`, `close`, `set_sample_rate`, `set_center_freq`, `set_tuner_gain_mode`,
+    `set_tuner_gain`, `get_tuner_gains`, `reset_buffer`, `read_sync`. Clear error if the library is missing:
+    "install with: sudo apt install librtlsdr0".
+  - `dsp.py` — pure numpy functions, unit-tested: `iq_from_u8(bytes) -> complex64` ((b-127.5)/127.5),
+    `power_dbfs(iq)`, `clip_fraction(raw_u8)` (share of bytes at 0 or 255), `spectrum_db(iq, nfft=1024)`
+    (Hann window, averaged over all full FFT frames, fftshift, dB), `dc_offset(iq)`.
+  - `source.py` — `ChannelReader` thread per device: loop `read_sync(2**16)`; keeps the latest raw block,
+    sample counter, measured samples/s (over 1 s), read errors, `last_ok` timestamp. `FakeSource` with the same
+    interface (noise + a tone at a per-channel offset, `--fake` flag; one channel can be made "dead" with
+    `--fake-dead N` for testing the UI). Retune/gain changes are applied by each reader thread between reads.
+  - `app.py` — Dash page (dash/plotly already used by the ground app; reuse the ground app's dark Kraken-like
+    style colours where easy). Refresh every 500 ms:
+    - header: number of `0bda:2838` devices found, their index/serial/product strings;
+    - one status card per channel: **DATA OK** (green) if last read < 1 s ago and samples/s > 90 % of the set rate,
+      **SLOW** (amber), **NO DATA** (red); shows samples/s, power dBFS, clip %, DC offset, read errors;
+    - overlaid spectrum of all channels (x = MHz around the center freq, 5 colours, legend by serial);
+    - power-vs-time trend per channel (last 60 s);
+    - controls: center frequency MHz (default 433.0), gain (dropdown from the tuner gain list, default 28.0 dB),
+      sample rate (1.024 / 2.048 / 2.4 MS/s, default 2.4), Apply button.
+  - `__main__.py` — args `--freq`, `--gain`, `--rate`, `--port` (default 8090), `--fake`, `--fake-dead`,
+    `--no-browser`; opens the default browser at `http://127.0.0.1:<port>` unless `--no-browser`;
+    binds 127.0.0.1 only; Ctrl-C closes all devices cleanly.
+- `krakenlink/deploy/laptop/kraken_view.sh` — one command for the user: checks `lsusb` and prints how many
+  `0bda:2838` devices exist (warn if not 5: "check KrakenSDR power supply / USB cable"); if `librtlsdr.so.0` is
+  missing, `sudo apt install -y librtlsdr0 rtl-sdr`; if `dvb_usb_rtl28xxu` is loaded, explain and
+  `sudo modprobe -r dvb_usb_rtl28xxu rtl2832_sdr rtl2832` and write a blacklist file
+  `/etc/modprobe.d/blacklist-rtlsdr-kraken.conf` (asks y/N first); then runs
+  `python3 -m krakenlink.tools.kraken_view "$@"` with `PYTHONPATH` set to the krakenlink package dir.
+  `set -euo pipefail`; all extra args are passed through (so `--fake` works with no hardware).
+- `krakenlink/deploy/laptop/README.md` — short: plug in (KrakenSDR on its own 5 V supply), run the script,
+  what green/amber/red mean, common fixes (DVB driver, permissions → replug after installing `rtl-sdr` udev rules,
+  only 4 devices → power).
+
+### 18.2 Not in scope
+Coherent sync, calibration, noise-source control and DOA (those need heimdall). No change to the bridge,
+ground app, protocol, firmware, or `krakensdr_doa/`.
+
+---
+
 # Acceptance criteria (Phase 2 — checked by reviewer)
 
 - [x] `krakenlink/proto`: frame codec + CRC-16/CCITT-FALSE + all §4 messages; `"123456789"` → `0x29B1`; all frames ≤ 128 B.
@@ -730,4 +779,19 @@ cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && (
 
 ```bash
 cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && for f in deploy/pi/*.sh; do bash -n "$f" || exit 1; done && { if command -v shellcheck >/dev/null; then shellcheck -S warning deploy/pi/*.sh; else echo "shellcheck not installed: SKIPPED"; fi; } && git diff --quiet HEAD -- ../krakensdr_doa && echo PHASE3 PASS
+```
+
+# Acceptance criteria (Phase 4 — laptop raw viewer, §18)
+
+- [ ] Files from §18.1 exist; `python -m krakenlink.tools.kraken_view --help` works without librtlsdr installed (the library is loaded lazily, only when real hardware is used).
+- [ ] `dsp.py` unit tests: u8→IQ scaling; a full-scale tone gives power ≈ −3 dBFS (±0.5); clip fraction; spectrum peak bin at the tone offset (±1 bin) with length nfft; DC offset.
+- [ ] Status logic is a pure function (`channel_status(last_ok_age, sps, set_rate) -> "DATA OK"|"SLOW"|"NO DATA"`), unit-tested at the boundaries.
+- [ ] With `--fake --fake-dead 3 --no-browser`, the Dash app builds its layout and one refresh callback returns 5 channel cards, channel 3 = NO DATA, the others = DATA OK (test calls the callback function directly; no browser).
+- [ ] `deploy/laptop/kraken_view.sh` passes `bash -n` and shellcheck at warning level.
+- [ ] All earlier tests still pass; `krakensdr_doa/` unchanged.
+
+# Test/verify command (Phase 4)
+
+```bash
+cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && bash -n deploy/laptop/kraken_view.sh && { if command -v shellcheck >/dev/null; then shellcheck -S warning deploy/laptop/*.sh deploy/pi/*.sh; else echo "shellcheck not installed: SKIPPED"; fi; } && python -m krakenlink.tools.kraken_view --help >/dev/null && git diff --quiet HEAD -- ../krakensdr_doa && echo PHASE4 PASS
 ```
