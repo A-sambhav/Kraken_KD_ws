@@ -1,0 +1,15 @@
+[Unit]
+Description=KrakenLink ESP-NOW bridge
+After=network.target krakensdr.service
+Wants=krakensdr.service
+
+[Service]
+Type=simple
+WorkingDirectory=@WORKDIR@
+ExecStart=@VENV@/bin/python -m krakenlink.bridge --config @CONFIG@
+Restart=always
+RestartSec=5
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

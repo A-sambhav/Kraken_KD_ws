@@ -718,16 +718,16 @@ cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && (
 
 # Acceptance criteria (Phase 3 — Pi OS deployment, §17)
 
-- [ ] `krakenlink/deploy/pi/` contains `install_kraken.sh`, `install_krakenlink.sh`, `kraken-headless.sh`, `krakensdr.service`, `bridge.pi.toml.in`, `README.md` as described in §17.1.
-- [ ] All shell scripts pass `bash -n` and `shellcheck -S warning` (when shellcheck is installed); use `set -euo pipefail`; `install_kraken.sh` refuses non-aarch64.
-- [ ] `kraken-headless.sh` starts no php/node/miniserve process and `exec`s `app.py` in the foreground.
-- [ ] Rendering `bridge.pi.toml.in` with sample values gives a TOML that the bridge config loader accepts, with `transport.type = "espnow_uart"` and `[fc].connection` set (pytest).
-- [ ] Port autodetect is a testable function (Python, `krakenlink/tools/ports.py`) and is unit-tested with a fake `/dev/serial/by-id` listing (ESP32 1a86/Espressif, CubeOrange if00 vs if02, missing devices).
-- [ ] `python -m krakenlink.tools.check` implements the 7 checks of §17.2; unit tests cover PASS and FAIL for checks 1, 3, 4, 5 using the simulator / fake files / fake serial; exit code 0 only when no FAIL.
-- [ ] `krakensdr_doa/` unchanged; all Phase 2 tests still pass.
+- [x] `krakenlink/deploy/pi/` contains `install_kraken.sh`, `install_krakenlink.sh`, `kraken-headless.sh`, `krakensdr.service`, `bridge.pi.toml.in`, `README.md` as described in §17.1.
+- [x] All shell scripts pass `bash -n` and `shellcheck -S warning` (when shellcheck is installed); use `set -euo pipefail`; `install_kraken.sh` refuses non-aarch64.
+- [x] `kraken-headless.sh` starts no php/node/miniserve process and `exec`s `app.py` in the foreground.
+- [x] Rendering `bridge.pi.toml.in` with sample values gives a TOML that the bridge config loader accepts, with `transport.type = "espnow_uart"` and `[fc].connection` set (pytest).
+- [x] Port autodetect is a testable function (Python, `krakenlink/tools/ports.py`) and is unit-tested with a fake `/dev/serial/by-id` listing (ESP32 1a86/Espressif, CubeOrange if00 vs if02, missing devices).
+- [x] `python -m krakenlink.tools.check` implements the 7 checks of §17.2; unit tests cover PASS and FAIL for checks 1, 3, 4, 5 using the simulator / fake files / fake serial; exit code 0 only when no FAIL.
+- [x] `krakensdr_doa/` unchanged; all Phase 2 tests still pass.
 
 # Test/verify command (Phase 3)
 
 ```bash
-cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && for f in deploy/pi/*.sh; do bash -n "$f" || exit 1; done && (command -v shellcheck >/dev/null && shellcheck -S warning deploy/pi/*.sh || echo "shellcheck not installed: SKIPPED") && git diff --quiet HEAD -- ../krakensdr_doa && echo PHASE3 PASS
+cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && for f in deploy/pi/*.sh; do bash -n "$f" || exit 1; done && { if command -v shellcheck >/dev/null; then shellcheck -S warning deploy/pi/*.sh; else echo "shellcheck not installed: SKIPPED"; fi; } && git diff --quiet HEAD -- ../krakensdr_doa && echo PHASE3 PASS
 ```

@@ -1,0 +1,25 @@
+daq_fs = 2400000
+
+[kraken]
+share = "@KRAKEN_ROOT@/krakensdr_doa/_share"
+
+[transport]
+type = "espnow_uart"
+port = "@AIR_PORT@"
+baud = 460800
+
+[fc]
+connection = "@FC_PORT@"
+baud = 115200
+
+[rate]
+bytes_per_second = 2500
+doa_hz = 5
+spectrum_hz = 1
+
+[commands]
+calibration_timeout = 30.0
+calib_settle_s = 1.0
+
+[logging]
+directory = "@LOG_DIR@"

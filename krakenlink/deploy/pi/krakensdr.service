@@ -1,0 +1,15 @@
+[Unit]
+Description=KrakenSDR headless DAQ and DOA
+After=network.target
+
+[Service]
+Type=simple
+Environment=KRAKEN_ROOT=@KRAKEN_ROOT@
+Environment=CONDA_SH=@CONDA_SH@
+ExecStart=@KRAKEN_ROOT@/kraken-headless.sh
+ExecStop=/bin/bash -c 'cd "@KRAKEN_ROOT@" && ./kraken_doa_stop.sh'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
