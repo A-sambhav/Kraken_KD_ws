@@ -1,7 +1,9 @@
 [Unit]
 Description=KrakenLink bridge (Kraken DOA -> ESP-NOW)
-After=krakensdr.service
-Wants=krakensdr.service
+# No ordering on krakensdr.service: the image orders it After=multi-user.target, so ordering this
+# WantedBy=multi-user.target unit after it is a cycle and systemd drops this unit at boot.
+# The bridge waits for Kraken's files by itself.
+After=network.target
 
 [Service]
 Type=simple
