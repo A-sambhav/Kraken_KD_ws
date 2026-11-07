@@ -1,0 +1,22 @@
+daq_fs = 2400000
+
+[kraken]
+share = "@KRAKEN_ROOT@/krakensdr_doa/_share"
+
+[transport]
+type = "loopback"
+host = "127.0.0.1"
+port = 14570
+bind_host = "127.0.0.1"
+bind_port = 14561
+
+[rate]
+bytes_per_second = 625
+
+[commands]
+calibration_timeout = 30.0
+calib_settle_s = 1.0
+retune_vfo_policy = "reject"
+
+[logging]
+directory = "@LOG_DIR@"

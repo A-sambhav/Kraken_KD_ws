@@ -8,7 +8,9 @@ source "$CONDA_SH"
 conda activate kraken
 set -u
 cd "$KRAKEN_ROOT"
-./kraken_doa_stop.sh || true
+STOP_SCRIPT="$KRAKEN_ROOT/kraken-stop.sh"
+[[ -x "$STOP_SCRIPT" ]] || STOP_SCRIPT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../common" && pwd)/kraken-stop.sh"
+KRAKEN_ROOT="$KRAKEN_ROOT" "$STOP_SCRIPT" || true
 (
   cd heimdall_daq_fw/Firmware
   ./daq_start_sm.sh

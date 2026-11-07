@@ -1,0 +1,13 @@
+[app]
+host = "127.0.0.1"
+port = 8050
+
+[transport]
+type = "loopback"
+host = "127.0.0.1"
+port = 14561
+bind_host = "127.0.0.1"
+bind_port = 14570
+
+[display]
+array_offset_cfg = 0

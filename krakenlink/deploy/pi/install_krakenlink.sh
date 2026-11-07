@@ -15,6 +15,7 @@ python3 -m venv "$VENV"
 "$VENV/bin/pip" install "$REPO_ROOT" pymavlink pyserial
 sudo usermod -aG dialout "$USER"
 install -m 755 "$SCRIPT_DIR/kraken-headless.sh" "$KRAKEN_ROOT/kraken-headless.sh"
+install -m 755 "$SCRIPT_DIR/../common/kraken-stop.sh" "$KRAKEN_ROOT/kraken-stop.sh"
 read -r AIR FC < <(PYTHONPATH="$REPO_ROOT" "$VENV/bin/python" -c 'from krakenlink.tools.ports import detect_ports; print(*detect_ports())')
 [[ -n "$AIR" ]] || { AIR=/dev/serial/by-id/REPLACE_AIR_ESP32; echo "WARN: air ESP32 not found; edit $CONFIG after connecting it" >&2; }
 [[ -n "$FC" ]] || { FC=/dev/serial/by-id/REPLACE_CUBE_ORANGE; echo "WARN: Cube Orange not found; edit $CONFIG after connecting it" >&2; }
