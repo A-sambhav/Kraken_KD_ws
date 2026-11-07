@@ -42,6 +42,11 @@ if ! conda env list | awk '{print $1}' | grep -qx kraken; then conda create -y -
 conda install -y -n kraken -c conda-forge scipy==1.9.3 numba==0.56.4 configparser pyzmq scikit-rf sympy pandas orjson matplotlib requests
 conda run -n kraken python -m pip install pyzmq dash_bootstrap_components==1.1.0 quart_compress==0.2.1 quart==0.17.0 dash_devices==0.1.3 pyargus
 conda install -y -n kraken dash==1.20.0 werkzeug==2.0.2 plotly==5.23.0
+# The pip step above pulls Flask 3 / Werkzeug 3 as pip packages; conda then writes 2.x files over them,
+# leaving a mixed tree (ImportError '_plain_int'). Remove every copy and pin with pip.
+for _ in 1 2 3; do conda run -n kraken python -m pip uninstall -y werkzeug flask >/dev/null 2>&1 || true; done
+conda run -n kraken python -m pip install --no-deps werkzeug==2.0.2 flask==2.1.3
+conda run -n kraken python -c "import werkzeug.exceptions, flask, quart, dash_devices"
 clone_build https://github.com/krakenrf/heimdall_daq_fw.git "$KRAKEN_ROOT/heimdall_daq_fw" "$HEIMDALL_REF"
 FW="$KRAKEN_ROOT/heimdall_daq_fw/Firmware"
 if [[ ! -f "$FW/_daq_core/.krakenlink_built" ]]; then
