@@ -783,12 +783,12 @@ cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && f
 
 # Acceptance criteria (Phase 4 — laptop raw viewer, §18)
 
-- [ ] Files from §18.1 exist; `python -m krakenlink.tools.kraken_view --help` works without librtlsdr installed (the library is loaded lazily, only when real hardware is used).
-- [ ] `dsp.py` unit tests: u8→IQ scaling; a full-scale tone gives power ≈ −3 dBFS (±0.5); clip fraction; spectrum peak bin at the tone offset (±1 bin) with length nfft; DC offset.
-- [ ] Status logic is a pure function (`channel_status(last_ok_age, sps, set_rate) -> "DATA OK"|"SLOW"|"NO DATA"`), unit-tested at the boundaries.
-- [ ] With `--fake --fake-dead 3 --no-browser`, the Dash app builds its layout and one refresh callback returns 5 channel cards, channel 3 = NO DATA, the others = DATA OK (test calls the callback function directly; no browser).
-- [ ] `deploy/laptop/kraken_view.sh` passes `bash -n` and shellcheck at warning level.
-- [ ] All earlier tests still pass; `krakensdr_doa/` unchanged.
+- [x] Files from §18.1 exist; `python -m krakenlink.tools.kraken_view --help` works without librtlsdr installed (the library is loaded lazily, only when real hardware is used).
+- [x] `dsp.py` unit tests: u8→IQ scaling; a full-scale tone gives power ≈ −3 dBFS (±0.5); clip fraction; spectrum peak bin at the tone offset (±1 bin) with length nfft; DC offset.
+- [x] Status logic is a pure function (`channel_status(last_ok_age, sps, set_rate) -> "DATA OK"|"SLOW"|"NO DATA"`), unit-tested at the boundaries.
+- [x] With `--fake --fake-dead 3 --no-browser`, the Dash app builds its layout and one refresh callback returns 5 channel cards, channel 3 = NO DATA, the others = DATA OK (test calls the callback function directly; no browser).
+- [x] `deploy/laptop/kraken_view.sh` passes `bash -n` and shellcheck at warning level.
+- [x] All earlier tests still pass; `krakensdr_doa/` unchanged.
 
 # Test/verify command (Phase 4)
 
