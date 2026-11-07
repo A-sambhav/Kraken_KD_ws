@@ -32,9 +32,11 @@ if [[ "$FAKE_MODE" != 1 ]] && command -v lsmod >/dev/null 2>&1 && lsmod | awk '{
     echo "The DVB kernel driver can claim the RTL-SDR devices."
     read -r -p "Unload it and blacklist DVB drivers for future boots? [y/N] " answer
     if [[ "$answer" =~ ^[Yy]$ ]]; then
-        sudo modprobe -r dvb_usb_rtl28xxu rtl2832_sdr rtl2832
         printf '%s\n' 'blacklist dvb_usb_rtl28xxu' 'blacklist rtl2832_sdr' 'blacklist rtl2832' | sudo tee /etc/modprobe.d/blacklist-rtlsdr-kraken.conf >/dev/null
         echo "Wrote /etc/modprobe.d/blacklist-rtlsdr-kraken.conf"
+        if ! sudo modprobe -r rtl2832_sdr dvb_usb_rtl28xxu rtl2832 2>/dev/null; then
+            echo "Driver is attached to the plugged-in KrakenSDR; librtlsdr will detach it on open (or unplug, re-run, replug)."
+        fi
     fi
 fi
 
