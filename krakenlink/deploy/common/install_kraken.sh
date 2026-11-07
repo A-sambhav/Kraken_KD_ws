@@ -42,11 +42,16 @@ if ! conda env list | awk '{print $1}' | grep -qx kraken; then conda create -y -
 conda install -y -n kraken -c conda-forge scipy==1.9.3 numba==0.56.4 configparser pyzmq scikit-rf sympy pandas orjson matplotlib requests
 conda run -n kraken python -m pip install pyzmq dash_bootstrap_components==1.1.0 quart_compress==0.2.1 quart==0.17.0 dash_devices==0.1.3 pyargus
 conda install -y -n kraken dash==1.20.0 werkzeug==2.0.2 plotly==5.23.0
-# The pip step above pulls Flask 3 / Werkzeug 3 as pip packages; conda then writes 2.x files over them,
-# leaving a mixed tree (ImportError '_plain_int'). Remove every copy and pin with pip.
-for _ in 1 2 3; do conda run -n kraken python -m pip uninstall -y werkzeug flask >/dev/null 2>&1 || true; done
-conda run -n kraken python -m pip install --no-deps werkzeug==2.0.2 flask==2.1.3
-conda run -n kraken python -c "import werkzeug.exceptions, flask, quart, dash_devices"
+# The pip step above pulls Dash 4 / Flask 3 / Werkzeug 3 / Plotly 7 as pip packages; conda then sees its pins
+# "already installed" or writes old files over new ones, leaving mixed trees (e.g. ImportError '_plain_int').
+# Remove every copy and pin with pip. Dash must be 2.x despite upstream's dash==1.20.0: dash_bootstrap_components
+# 1.1.0 does 'from dash import html', while dash_devices (a Dash 1 fork) still works on Dash 2.3.1.
+PINNED=(dash==2.3.1 flask==2.1.3 werkzeug==2.0.2 plotly==5.23.0)
+for _ in 1 2 3; do conda run -n kraken python -m pip uninstall -y dash flask werkzeug plotly >/dev/null 2>&1 || true; done
+conda run -n kraken python -m pip install --no-deps "${PINNED[@]}"
+conda run -n kraken python -c "import dash_bootstrap_components, dash, flask, werkzeug, plotly, werkzeug.exceptions, quart, dash_devices
+v = (dash.__version__, flask.__version__, werkzeug.__version__, plotly.__version__)
+assert v == ('2.3.1', '2.1.3', '2.0.2', '5.23.0'), v"
 clone_build https://github.com/krakenrf/heimdall_daq_fw.git "$KRAKEN_ROOT/heimdall_daq_fw" "$HEIMDALL_REF"
 FW="$KRAKEN_ROOT/heimdall_daq_fw/Firmware"
 if [[ ! -f "$FW/_daq_core/.krakenlink_built" ]]; then
@@ -59,7 +64,7 @@ CONFIG_SOURCE="$KRAKEN_ROOT/heimdall_daq_fw/config_files/kraken_default"
 cp -a "$CONFIG_SOURCE"/. "$FW/"
 [[ -f "$FW/daq_chain_config.ini" ]] || { echo 'Kraken default preconfig did not provide daq_chain_config.ini' >&2; exit 1; }
 REPO=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd)
-rsync -a --delete "$REPO/krakensdr_doa/" "$KRAKEN_ROOT/krakensdr_doa/"
+rsync -a --delete --exclude='_share/' --exclude='__pycache__/' "$REPO/krakensdr_doa/" "$KRAKEN_ROOT/krakensdr_doa/"
 cp "$KRAKEN_ROOT/krakensdr_doa/util/kraken_doa_start.sh" "$KRAKEN_ROOT/"
 install -m 755 "$(dirname -- "${BASH_SOURCE[0]}")/kraken-stop.sh" "$KRAKEN_ROOT/kraken-stop.sh"
 if [[ "$ARCH" == aarch64 ]]; then

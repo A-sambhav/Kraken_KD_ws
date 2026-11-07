@@ -28,7 +28,8 @@ GROUND_PID=
 KRAKEN_STARTED=0
 cleanup() {
   trap - INT TERM EXIT
-  [[ -z "$BRIDGE_PID" ]] || sudo kill "$BRIDGE_PID" 2>/dev/null || true
+  # BRIDGE_PID is the sudo wrapper, which does not relay our SIGTERM: signal the bridge (its child) directly.
+  [[ -z "$BRIDGE_PID" ]] || sudo pkill -TERM -P "$BRIDGE_PID" 2>/dev/null || true
   [[ -z "$GROUND_PID" ]] || kill "$GROUND_PID" 2>/dev/null || true
   [[ -z "$BRIDGE_PID" ]] || wait "$BRIDGE_PID" 2>/dev/null || true
   [[ -z "$GROUND_PID" ]] || wait "$GROUND_PID" 2>/dev/null || true
