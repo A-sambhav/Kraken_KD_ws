@@ -905,6 +905,33 @@ the generated tree is committed so it can be copied as is. Never hand-edit `dist
 No change to protocol, bridge/ground Python code, firmware source, or `krakensdr_doa/`. Existing
 `deploy/krakenimage/{run_bridge.sh,...}` behaviour unchanged (only new files added there).
 
+## 22. Serial transport: recover after USB unplug/replug (v0.9)
+
+Found on hardware (2026-11-07): after the AIR ESP32 was unplugged and replugged on the Pi, the bridge stayed
+up (still reading Kraken) but never reopened the serial port, so nothing reached the ground until the service
+was restarted. The ground app had the same failure after replugging the GROUND ESP32.
+
+Cause, in `krakenlink/krakenlink/bridge/transports/espnow_uart.py` (`ESPNowUARTTransport`, also used by the
+ground via `ESPNowSerialTransport`): `_lost()` sets `reopen_at = now + reopen_interval`. While that time is in the
+future, `_ensure()` raises `OSError('reconnect pending')`; `recv()`/`send()` catch it with their generic
+`except` and call `_lost()` again, which pushes `reopen_at` forward again. Both apps call `recv()` every few ms,
+so the reopen time is never reached. Second flaw: a packet that fails `cobs_decode` (e.g. the partial first
+packet after opening mid-stream) also goes to `_lost()` and closes a healthy port.
+
+### 22.1 Changes (only `espnow_uart.py`)
+- While a reconnect is pending, `send()` returns False and `recv()` returns None **without** calling `_lost()`
+  and without counting it as a bad frame; `reopen_at` is not moved.
+- Once `reopen_at` has passed, the next `send()`/`recv()` tries to open the port; if opening fails, schedule the
+  next attempt `reopen_interval` later (so retries happen every `reopen_interval` seconds until the device is back).
+- Only real I/O errors (open/read/write raising) close the port. A packet that fails `cobs_decode` increments
+  `self.bad` and is dropped; the port stays open and the next packet is processed.
+- Opening uses `write_timeout` (default 1.0 s, constructor arg) so a stalled device cannot block `send()` forever;
+  a write timeout counts as an I/O error (port closed, reopen scheduled).
+- Public behaviour otherwise unchanged (frame format, `stats()`, `local_status`, `close()`, the `tx_lock`).
+
+### 22.2 Not in scope
+No change to bridge/ground logic, protocol, firmware, deploy scripts. `dist/` is regenerated afterwards.
+
 ---
 
 # Acceptance criteria (Phase 2 — checked by reviewer)
@@ -998,4 +1025,19 @@ cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && g
 
 ```bash
 cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && { if command -v shellcheck >/dev/null; then shellcheck -S warning make_dist.sh deploy/*/*.sh ../dist/*/*.sh ../dist/esp/*/*.sh; else echo "shellcheck not installed: SKIPPED"; fi; } && git diff --quiet HEAD -- ../krakensdr_doa && echo PHASE7 PASS
+```
+
+# Acceptance criteria (Phase 8 — serial reconnect, §22)
+
+- [ ] New tests in `krakenlink/tests/test_espnow_reconnect.py` with a fake serial factory and an injected clock (add an optional `clock=time.monotonic` constructor arg if needed; default behaviour unchanged):
+  - [ ] device disappears (read raises), then the factory raises for 3 s ("unplugged"), then succeeds: with `recv()` called every 5 ms of fake time and `reopen_interval=2`, the port is reopened within `reopen_interval` of the device coming back, and frames written by the fake device afterwards are returned by `recv()`.
+  - [ ] while reconnect is pending, `reopen_at` never moves and no exception escapes `send()`/`recv()`.
+  - [ ] a garbage packet (fails `cobs_decode`) followed by a valid frame: `recv()` returns the valid frame, `bad` increased by 1, the port was never closed/reopened.
+  - [ ] a write that raises `serial.SerialTimeoutException`-like error closes the port and schedules a reopen; `send()` returns False.
+- [ ] All earlier tests pass unmodified; `krakensdr_doa/` unchanged.
+
+# Test/verify command (Phase 8)
+
+```bash
+cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && git diff --quiet HEAD -- ../krakensdr_doa && echo PHASE8 PASS
 ```
