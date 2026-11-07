@@ -614,6 +614,89 @@ Recreate the *look* with our own CSS in `krakenlink/krakenlink/ground/assets/sty
 
 ---
 
+## 17. Phase 3 — stock Raspberry Pi OS deployment (ESP-NOW + Cube), v0.4
+
+Target: **Raspberry Pi 5 (8 GB), stock Raspberry Pi OS 64-bit (Bookworm or newer, Lite or Desktop)**,
+any username. The Pi runs the KrakenSDR stack itself (heimdall DAQ reads the raw IQ from the
+KrakenSDR → krakensdr_doa computes DOA), headless, on boot. The bridge sends to the ground over
+**ESP-NOW only** (air ESP32-S3 on Pi USB). The Cube Orange is connected over **USB** for pose and heading
+only (`[fc]`); the telemetry radio is not used by KrakenLink. Ground side is unchanged
+(`deploy/ground.espnow.toml` + ground ESP32-S3 + ground app).
+
+```
+KrakenSDR ─USB─► heimdall_daq_fw ─shm/zmq─► krakensdr_doa app.py (DSP, headless) ─► _share/DOA_value.html
+                                                                     ▲ settings.json  │
+Cube Orange ─USB (MAVLink, pose/heading)─► krakenlink bridge ◄───────┴────────────────┘
+                                                  │ COBS/UART 460800
+                                           air ESP32-S3 ──ESP-NOW──► ground ESP32-S3 ─USB─► ground app
+```
+
+### 17.1 Files (all new, under `krakenlink/deploy/pi/`)
+
+- `install_kraken.sh` — installs the Kraken stack on stock Pi OS. Run as the normal user (uses `sudo` inside).
+  Idempotent (re-running skips finished steps), `set -euo pipefail`, logs each step, aborts on non-aarch64.
+  Install root `KRAKEN_ROOT=${KRAKEN_ROOT:-$HOME/krakensdr}`. Steps (upstream heimdall README, Pi path):
+  1. `apt install build-essential git cmake libusb-1.0-0-dev lsof libzmq3-dev clang php-cli nodejs jq rsync`
+  2. `krakenrf/librtlsdr` → build with `-DINSTALL_UDEV_RULES=ON`, install `rtl-sdr.rules`, symlink
+     `rtl_test` → `/usr/local/bin/kraken_test`; blacklist `dvb_usb_rtl28xxu` (+ `rtl2832`, `rtl2830`) in
+     `/etc/modprobe.d/`.
+  3. `krakenrf/kfr` → `cmake -DENABLE_CAPI_BUILD=ON -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release`,
+     copy `build/lib/*` to `/usr/local/lib`, `include/kfr/capi.h` to `/usr/include/kfr/`, `ldconfig`.
+  4. `krakenrf/Ne10` → `cmake -DNE10_LINUX_TARGET_ARCH=aarch64 -DGNULINUX_PLATFORM=ON
+     -DCMAKE_C_FLAGS="-mcpu=native -Ofast -funsafe-math-optimizations"`, copy `libNE10.a` to `/usr/lib`.
+  5. Miniforge (aarch64) into `$HOME/miniforge3` (batch mode `-b`), `auto_activate_base false`,
+     env `kraken` with `python=3.9.7`; `conda install -c conda-forge scipy numba configparser sympy pandas
+     orjson matplotlib requests`; pip: `pyzmq dash_bootstrap_components==1.1.0 quart_compress==0.2.1
+     quart==0.17.0 dash_devices==0.1.3 pyargus`; then `conda install dash==1.20.0 werkzeug==2.0.2 plotly==5.23.0`
+     (this order, per krakensdr_doa README).
+  6. `krakenrf/heimdall_daq_fw` → into `$KRAKEN_ROOT`; copy `librtlsdr.a`, `rtl-sdr.h`, `rtl-sdr_export.h`
+     into `Firmware/_daq_core/`, `make`; copy the KrakenSDR default `daq_chain_config.ini`
+     (`Firmware/preconfigs/kraken_default/` or equivalent upstream path; fail loudly if missing).
+  7. krakensdr_doa: **use this repo's vendored `krakensdr_doa/`** (rsync to `$KRAKEN_ROOT/krakensdr_doa`,
+     so findings F1–F10 stay true), copy `util/kraken_doa_{start,stop}.sh` to `$KRAKEN_ROOT`.
+  8. Pi 5 power: append `usb_max_current_enable=1` to `/boot/firmware/config.txt` if absent; print a
+     reminder that the KrakenSDR needs its own 5 V supply and the Pi a 5 V/5 A supply.
+  Every git clone is pinned via variables at the top (`*_REF`, default `main`) so a known-good commit can be fixed later.
+- `kraken-headless.sh` — foreground launcher used by systemd: sources `$HOME/miniforge3/etc/profile.d/conda.sh`,
+  activates `kraken`, runs `kraken_doa_stop.sh`, starts `heimdall_daq_fw/Firmware/daq_start_sm.sh`, creates
+  `_share/` log dirs, then `exec python3 _ui/_web_interface/app.py` from `krakensdr_doa/` (the DSP lives in this
+  process, F2). **No php server, no node server, no browser.** The Dash UI on :8080 stays reachable for debug.
+  On SIGTERM runs `kraken_doa_stop.sh`.
+- `krakensdr.service` (template with `@USER@`/`@KRAKEN_ROOT@` placeholders) — `Type=simple`, root (heimdall
+  needs it), `ExecStart=.../kraken-headless.sh`, `Restart=always`, `RestartSec=5`, `After=network.target`.
+- `install_krakenlink.sh` — run as the normal user after `install_kraken.sh`:
+  1. venv at `$HOME/krakenlink/.venv` (system `python3`), `pip install` the `krakenlink` package (+ pymavlink, pyserial).
+  2. Adds the user to `dialout`.
+  3. **Port autodetect:** air ESP32 = first `/dev/serial/by-id/*` matching `1a86` or `Espressif`; Cube =
+     `/dev/serial/by-id/*CubeOrange*-if00` (fallback `*CubePilot*-if00`, `*ArduPilot*-if00`). Missing device →
+     placeholder + warning, not a failure (the user can plug in later and re-run).
+  4. Renders `deploy/pi/bridge.pi.toml.in` → `$HOME/krakenlink/bridge.toml` (share path, ports, log dir).
+  5. Renders and installs `krakensdr.service` and `krakenlink-bridge.service` (`After=`/`Wants=krakensdr.service`,
+     ESP-NOW config, `Nice=10`), `daemon-reload`, `enable` both (does **not** start unless `--start`).
+- `bridge.pi.toml.in` — like `deploy/bridge.espnow.toml` plus `[fc] connection = "@FC_PORT@"`, `baud = 115200`,
+  `share = "@KRAKEN_ROOT@/krakensdr_doa/_share"`, logging under `$HOME/krakenlink/logs`.
+- `README.md` — from a fresh SD card to data on the ground UI: flash, clone repo, two scripts, reboot, check,
+  ground side commands. Includes ArduPilot note: USB MAVLink works with no params; data rates are requested by the bridge.
+
+### 17.2 Health check: `python -m krakenlink.tools.check --config <bridge.toml>`
+
+Prints one line per check, `PASS`/`FAIL`/`WARN` + detail, exit code 0 only if no FAIL:
+1. KrakenSDR on USB: ≥ 5 devices with USB ID `0bda:2838` (from `/sys/bus/usb/devices/*/idVendor,idProduct`).
+2. `krakensdr.service` active (`systemctl is-active`; WARN if systemctl unavailable).
+3. `DOA_value.html` exists, mtime < 3 s old, last line parses with the bridge's CSV parser (377 fields).
+4. `settings.json` readable, `doa_data_format == "Kraken App"` (WARN otherwise: bridge fixes it on start).
+5. Air ESP32 port exists; open it, wait ≤ 3 s for a 0x7F status frame; report `paired` + peer MAC (FAIL if no
+   status frame, WARN if not paired). Skipped with WARN when the bridge service holds the port.
+6. FC port exists; ≤ 3 s for a MAVLink HEARTBEAT (WARN if missing: DOA still flows, without heading/pose).
+7. `krakenlink-bridge.service` active.
+Each check is a pure function that takes paths/readers so it can be unit-tested with the simulator and fakes.
+
+### 17.3 Not in scope
+No change to `krakensdr_doa/`, the protocol, the ground app, or the firmware. MAVLink transport stays available
+but is not used in this deployment.
+
+---
+
 # Acceptance criteria (Phase 2 — checked by reviewer)
 
 - [x] `krakenlink/proto`: frame codec + CRC-16/CCITT-FALSE + all §4 messages; `"123456789"` → `0x29B1`; all frames ≤ 128 B.
@@ -631,4 +714,20 @@ Recreate the *look* with our own CSS in `krakenlink/krakenlink/ground/assets/sty
 
 ```bash
 cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && (command -v pio >/dev/null && pio run -d firmware/esp32_link || echo "pio not installed: firmware build SKIPPED")
+```
+
+# Acceptance criteria (Phase 3 — Pi OS deployment, §17)
+
+- [ ] `krakenlink/deploy/pi/` contains `install_kraken.sh`, `install_krakenlink.sh`, `kraken-headless.sh`, `krakensdr.service`, `bridge.pi.toml.in`, `README.md` as described in §17.1.
+- [ ] All shell scripts pass `bash -n` and `shellcheck -S warning` (when shellcheck is installed); use `set -euo pipefail`; `install_kraken.sh` refuses non-aarch64.
+- [ ] `kraken-headless.sh` starts no php/node/miniserve process and `exec`s `app.py` in the foreground.
+- [ ] Rendering `bridge.pi.toml.in` with sample values gives a TOML that the bridge config loader accepts, with `transport.type = "espnow_uart"` and `[fc].connection` set (pytest).
+- [ ] Port autodetect is a testable function (Python, `krakenlink/tools/ports.py`) and is unit-tested with a fake `/dev/serial/by-id` listing (ESP32 1a86/Espressif, CubeOrange if00 vs if02, missing devices).
+- [ ] `python -m krakenlink.tools.check` implements the 7 checks of §17.2; unit tests cover PASS and FAIL for checks 1, 3, 4, 5 using the simulator / fake files / fake serial; exit code 0 only when no FAIL.
+- [ ] `krakensdr_doa/` unchanged; all Phase 2 tests still pass.
+
+# Test/verify command (Phase 3)
+
+```bash
+cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && for f in deploy/pi/*.sh; do bash -n "$f" || exit 1; done && (command -v shellcheck >/dev/null && shellcheck -S warning deploy/pi/*.sh || echo "shellcheck not installed: SKIPPED") && git diff --quiet HEAD -- ../krakensdr_doa && echo PHASE3 PASS
 ```
