@@ -16,7 +16,7 @@ Kraken (_share/DOA_value.html, settings.json) -> bridge (~/krakenlink) -> AIR ES
 | `push.sh [user@host]` | laptop | rsyncs `krakenlink/` + the files below to `~/krakenlink` on the Pi, restarts the bridge |
 | `run_bridge.sh` | Pi | `run` (foreground, used by systemd), `start`/`stop` (by hand), `status`, `log`, `install-service`, `remove-service` |
 | `bridge.toml.in` | Pi | bridge config; `@AIR_PORT@` is filled from `/dev/serial/by-id` at every start |
-| `krakenlink-bridge.service.in` | Pi | systemd unit, runs as `krakenrf`, `Restart=always` (waits for the ESP32 / Kraken) |
+| `krakenlink-bridge.service.in` | Pi | systemd unit, runs as **root** (ground commands rewrite Kraken's root-owned `settings.json`), `Restart=always` (waits for the ESP32 / Kraken) |
 
 ## Setup (once)
 
@@ -33,8 +33,8 @@ Kraken (_share/DOA_value.html, settings.json) -> bridge (~/krakenlink) -> AIR ES
 
 ## Limits
 
-- The bridge runs as `krakenrf`; Kraken's `settings.json` is root-owned, so ground → Pi **commands are
-  refused** (DOA/spectrum/status downlink works). Running the bridge as root would enable them.
+- The bridge runs as root so ground → Pi commands can rewrite Kraken's `settings.json` (same file the Kraken
+  web UI edits). Files in `~/krakenlink` stay owned by `krakenrf`; new CSV logs are root-owned.
 - Kraken writes DOA only when a signal is above the VFO squelch, unless the squelch is set below the noise
   floor (then you get bearings on noise with very low confidence).
 - The Pi has no time sync off-network; CSV log timestamps use its clock.

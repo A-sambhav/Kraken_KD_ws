@@ -5,7 +5,8 @@ Wants=krakensdr.service
 
 [Service]
 Type=simple
-User=@USER@
+# Root: Kraken's settings.json is root-owned and ground commands rewrite it.
+User=root
 WorkingDirectory=@HERE@
 ExecStart=@HERE@/run_bridge.sh run
 # Retries until the ESP32 is plugged in and Kraken has written its files.
