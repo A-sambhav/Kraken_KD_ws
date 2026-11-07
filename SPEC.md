@@ -809,6 +809,27 @@ Miniforge installer `Miniforge3-Linux-$(uname -m).sh`.
 No change to `krakensdr_doa/`, protocol, bridge/ground code, firmware. No DOA in the raw viewer (it can't
 be coherent without heimdall's sample/phase calibration).
 
+## 20. Ground GUI settings: thread-safe command client (v0.7)
+
+Found on real hardware (2026-11-07): pressing Settings buttons in the ground GUI can kill the ground app's
+receive thread (`pump` in `krakenlink/ground/app.py`), after which the link shows LOST forever and commands stay
+`pending`. Cause: `CommandClient` (`krakenlink/ground/commands.py`) is used from two threads with no lock —
+Dash callback threads call `submit()`, the pump thread calls `tick()`/`receive_ack()`. `submit()` inserts the
+command with `last_send=None` *before* `_transmit()` sets it, so a concurrent `tick()` raises
+`TypeError: float - NoneType`; `tick()` also iterates the dict while `submit()` may insert into it.
+
+### 20.1 Changes
+- `krakenlink/ground/commands.py`: one `threading.RLock` guards `submit`, `receive_ack`, `tick` and any other
+  method that reads/writes `self.commands`, `self.seq`, `self.next_id`. A command is fully initialised
+  (`last_send` set) before other threads can see it. `tick()` iterates over a snapshot. `tick()` returns a
+  copy (list or dict) the caller can iterate safely. Behaviour (retry timing, statuses, ids) unchanged.
+- `krakenlink/ground/app.py` `pump()`: an exception in one loop iteration is logged (with traceback) and the loop
+  continues; the thread must never exit because of one bad frame or command. No other change to app.py.
+- `_command_rows(commands)` (the GUI table) reads commands through the lock-safe snapshot, not the live dict.
+
+### 20.2 Not in scope
+No protocol, bridge or firmware change. No GUI layout change.
+
 ---
 
 # Acceptance criteria (Phase 2 — checked by reviewer)
@@ -873,4 +894,17 @@ cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && b
 
 ```bash
 cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && for f in deploy/*/*.sh; do bash -n "$f" || exit 1; done && { if command -v shellcheck >/dev/null; then shellcheck -S warning deploy/*/*.sh; else echo "shellcheck not installed: SKIPPED"; fi; } && bash deploy/laptop/kraken_doa.sh --help >/dev/null && git diff --quiet HEAD -- ../krakensdr_doa && echo PHASE5 PASS
+```
+
+# Acceptance criteria (Phase 6 — thread-safe ground commands, §20)
+
+- [ ] New test in `krakenlink/tests/test_ground.py`: one thread calls `CommandClient.submit()` 2 000 times (with a `send` that sleeps ~0 s) while another thread calls `tick()` and `receive_ack()` in a tight loop for the same period; no exception in either thread, and every submitted id is present with a valid status.
+- [ ] New test: `pump`-style loop survives an exception — a transport whose `recv()` raises once, then returns frames: the loop keeps running and later frames are processed (factor the loop body so it is testable without starting Dash or a real serial port).
+- [ ] Existing command-client behaviour unchanged: all earlier tests pass unmodified.
+- [ ] `krakensdr_doa/` unchanged.
+
+# Test/verify command (Phase 6)
+
+```bash
+cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && git diff --quiet HEAD -- ../krakensdr_doa && echo PHASE6 PASS
 ```
