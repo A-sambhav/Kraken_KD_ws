@@ -746,6 +746,64 @@ ground app, protocol, firmware, or `krakensdr_doa/`.
 
 ---
 
+## 19. Laptop DOA (v0.6) — full Kraken stack on the laptop, same code as the Pi
+
+With the KrakenSDR on the laptop's USB, run the **same** Kraken processing chain as the Pi (heimdall DAQ →
+vendored `krakensdr_doa`) on the laptop (Ubuntu 22.04 x86_64), so DOA is estimated on the laptop and shown in:
+(a) the official Kraken web UI at `http://127.0.0.1:8080` (DOA polar plot, spectrum, calibration status), and
+optionally (b) our ground app at `http://127.0.0.1:8050`, fed by our bridge over a local loopback link — an
+end-to-end test of bridge + protocol + ground app with real DOA, no radio. The raw viewer (§18) stays as-is.
+Raw viewer and Kraken cannot run at the same time (both open the USB devices); the launcher checks this.
+
+Upstream x86 facts (heimdall + krakensdr_doa READMEs, fetched 2026-11-07): **Ne10 is ARM-only, skip on x86**;
+the `_daq_core` Makefile picks `decimate_x86` (links `-lkfr_capi`) automatically, **no Makefile edits**;
+heimdall conda deps are `scipy==1.9.3 numba==0.56.4 configparser pyzmq scikit-rf` in env `kraken`
+(python 3.9.7); KrakenSDR preconfig dir `heimdall_daq_fw/config_files/kraken_default/`;
+Miniforge installer `Miniforge3-Linux-$(uname -m).sh`.
+
+### 19.1 Changes
+- `krakenlink/deploy/pi/install_kraken.sh` → **arch-aware** (accept `aarch64` and `x86_64`, refuse others):
+  - x86_64: skip Ne10 and the `/boot/firmware/config.txt` power step; Miniforge installer by `uname -m`.
+  - both: conda deps per upstream: `scipy==1.9.3 numba==0.56.4 configparser pyzmq scikit-rf` (conda-forge),
+    then the existing krakensdr_doa deps in the existing order.
+  - heimdall preconfig: copy **all files** of `config_files/kraken_default/` into `Firmware/` (the preconfig
+    dir may hold more than the .ini); fail loudly if the dir is missing.
+  - blacklist file name stays `/etc/modprobe.d/krakensdr-rtl.conf`.
+  - Move it to `krakenlink/deploy/common/install_kraken.sh` and leave `deploy/pi/install_kraken.sh` as a
+    2-line wrapper that execs it (README paths keep working).
+- `krakenlink/deploy/pi/kraken-headless.sh` → also usable on the laptop: same env vars
+  (`KRAKEN_ROOT`, `CONDA_SH`), no other change needed; copy-free reuse from the laptop launcher.
+- New `krakenlink/deploy/laptop/kraken_doa.sh` (run by the user in a normal terminal; uses `sudo`):
+  1. Refuse if `krakenlink.tools.kraken_view` or `rtl_test` is running (print the PIDs, "close the raw viewer first").
+  2. If `$KRAKEN_ROOT/krakensdr_doa` is missing: print "run deploy/common/install_kraken.sh first" and exit 1.
+  3. Sync the vendored `krakensdr_doa/` into `$KRAKEN_ROOT/krakensdr_doa/` (rsync, excluding `_share/`), so
+     the laptop always runs the repo's copy.
+  4. `sudo -v` once, then run `kraken-headless.sh` with `sudo env KRAKEN_ROOT=... CONDA_SH=$HOME/miniforge3/etc/profile.d/conda.sh`
+     in the background, logging to `$KRAKEN_ROOT/kraken_doa.log`.
+  5. Wait (≤ 120 s; numba JIT on first run) until `http://127.0.0.1:8080` answers, printing progress dots;
+     then open the browser on it (unless `--no-browser`).
+  6. With `--with-ground`: also start the bridge (`sudo` — Kraken's files are root-owned) with
+     `deploy/laptop/bridge.local.toml` and the ground app with `deploy/laptop/ground.local.toml` (loopback on
+     127.0.0.1, ports 14561/14570 as in the LAN configs), and open `http://127.0.0.1:8050`.
+     The bridge runs from the repo with `PYTHONPATH` set, using system `python3` (deps already present for the
+     ground app; print a clear error naming the missing module otherwise).
+  7. Ctrl-C (trap INT/TERM/EXIT) stops everything it started: bridge, ground app, then
+     `sudo ./kraken_doa_stop.sh` from `$KRAKEN_ROOT`. Prints where the logs are.
+  `set -euo pipefail`; `--help` prints usage without needing sudo or hardware.
+- New `krakenlink/deploy/laptop/bridge.local.toml` (share = `$HOME`-independent placeholder is not possible in
+  TOML: the launcher renders `bridge.local.toml.in` → `$KRAKEN_ROOT/../krakenlink-local/bridge.toml` with
+  `@KRAKEN_ROOT@` and `@LOG_DIR@`; no `[fc]` section) and `ground.local.toml` (static).
+- `krakenlink/deploy/laptop/README.md`: add a "DOA on the laptop" section: one-time install
+  (`deploy/common/install_kraken.sh`, reboot), then `deploy/laptop/kraken_doa.sh [--with-ground]`; in the Kraken
+  UI set the array geometry (UCA radius / ULA spacing), wait for calibration "OK", then DOA appears; first run
+  can take 1–2 min (numba compile).
+
+### 19.2 Not in scope
+No change to `krakensdr_doa/`, protocol, bridge/ground code, firmware. No DOA in the raw viewer (it can't
+be coherent without heimdall's sample/phase calibration).
+
+---
+
 # Acceptance criteria (Phase 2 — checked by reviewer)
 
 - [x] `krakenlink/proto`: frame codec + CRC-16/CCITT-FALSE + all §4 messages; `"123456789"` → `0x29B1`; all frames ≤ 128 B.
@@ -794,4 +852,18 @@ cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && f
 
 ```bash
 cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && bash -n deploy/laptop/kraken_view.sh && { if command -v shellcheck >/dev/null; then shellcheck -S warning deploy/laptop/*.sh deploy/pi/*.sh; else echo "shellcheck not installed: SKIPPED"; fi; } && python -m krakenlink.tools.kraken_view --help >/dev/null && git diff --quiet HEAD -- ../krakensdr_doa && echo PHASE4 PASS
+```
+
+# Acceptance criteria (Phase 5 — laptop DOA, §19)
+
+- [ ] `deploy/common/install_kraken.sh` accepts aarch64 and x86_64 and refuses others (test runs it with a faked `uname` on PATH and checks the exit code/message, without network or sudo); x86_64 path contains no Ne10 build and no `/boot/firmware` edit; conda step includes `scipy==1.9.3 numba==0.56.4 configparser pyzmq scikit-rf`; preconfig copied from `config_files/kraken_default/`.
+- [ ] `deploy/pi/install_kraken.sh` is a thin wrapper that execs the common script.
+- [ ] `deploy/laptop/kraken_doa.sh --help` exits 0 with usage, needing no sudo/hardware; the script contains the raw-viewer conflict check, the 120 s wait for :8080, and a cleanup trap that runs `kraken_doa_stop.sh`.
+- [ ] Rendering `bridge.local.toml.in` gives a config the bridge loader accepts (`transport.type = "loopback"`, 127.0.0.1, ports matching `ground.local.toml`, no `[fc]`); `ground.local.toml` loads in the ground app's config loader (pytest).
+- [ ] All shell scripts pass `bash -n` and shellcheck at warning level; all earlier tests pass; `krakensdr_doa/` unchanged.
+
+# Test/verify command (Phase 5)
+
+```bash
+cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && for f in deploy/*/*.sh; do bash -n "$f" || exit 1; done && { if command -v shellcheck >/dev/null; then shellcheck -S warning deploy/*/*.sh; else echo "shellcheck not installed: SKIPPED"; fi; } && bash deploy/laptop/kraken_doa.sh --help >/dev/null && git diff --quiet HEAD -- ../krakensdr_doa && echo PHASE5 PASS
 ```
