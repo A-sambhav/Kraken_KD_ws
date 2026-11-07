@@ -898,10 +898,10 @@ cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && f
 
 # Acceptance criteria (Phase 6 — thread-safe ground commands, §20)
 
-- [ ] New test in `krakenlink/tests/test_ground.py`: one thread calls `CommandClient.submit()` 2 000 times (with a `send` that sleeps ~0 s) while another thread calls `tick()` and `receive_ack()` in a tight loop for the same period; no exception in either thread, and every submitted id is present with a valid status.
-- [ ] New test: `pump`-style loop survives an exception — a transport whose `recv()` raises once, then returns frames: the loop keeps running and later frames are processed (factor the loop body so it is testable without starting Dash or a real serial port).
-- [ ] Existing command-client behaviour unchanged: all earlier tests pass unmodified.
-- [ ] `krakensdr_doa/` unchanged.
+- [x] New test in `krakenlink/tests/test_ground.py`: one thread calls `CommandClient.submit()` 2 000 times (with a `send` that sleeps ~0 s) while another thread calls `tick()` and `receive_ack()` in a tight loop for the same period; no exception in either thread, and every submitted id is present with a valid status.
+- [x] New test: `pump`-style loop survives an exception — a transport whose `recv()` raises once, then returns frames: the loop keeps running and later frames are processed (factor the loop body so it is testable without starting Dash or a real serial port).
+- [x] Existing command-client behaviour unchanged: all earlier tests pass unmodified.
+- [x] `krakensdr_doa/` unchanged.
 
 # Test/verify command (Phase 6)
 

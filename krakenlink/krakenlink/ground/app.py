@@ -1,6 +1,7 @@
 """Dash ground station; importing/building layout does not start a server."""
 import math
 import struct
+import time
 from pathlib import Path
 
 STATUS_COLORS = {'UP': '#7ccc63', 'OK': '#7ccc63', 'RUNNING': '#7ccc63', 'NO': '#7ccc63', 'DEGRADED': '#f39c12',
@@ -101,7 +102,31 @@ def _command_rows(commands):
     if not commands:return []
     from dash import html
     names={0:'OK',1:'BAD_OPCODE',2:'BAD_LEN',3:'OUT_OF_RANGE',4:'VFO_OUT_OF_WINDOW',5:'INCOMPATIBLE',6:'BUSY',7:'KRAKEN_DOWN',8:'WRITE_FAILED',9:'NOT_CONSUMED',10:'CALIB_TIMEOUT',11:'VFO_MOVED'}
-    return html.Table([html.Thead(html.Tr([html.Th(x) for x in ('ID','Opcode','Status','Reason')])),html.Tbody([html.Tr([html.Td(str(c['cmd_id'])),html.Td(str(c['opcode'])),html.Td(c['status']),html.Td(names.get(c.get('reason'),str(c.get('reason') or '')))]) for c in list(commands.commands.values())[-30:]])])
+    snapshot=commands.snapshot() if hasattr(commands,'snapshot') else dict(commands.commands)
+    return html.Table([html.Thead(html.Tr([html.Th(x) for x in ('ID','Opcode','Status','Reason')])),html.Tbody([html.Tr([html.Td(str(c['cmd_id'])),html.Td(str(c['opcode'])),html.Td(c['status']),html.Td(names.get(c.get('reason'),str(c.get('reason') or '')))]) for c in list(snapshot.values())[-30:]])])
+
+def pump_iteration(transport, link, client, last_ping, clock=time.monotonic):
+    """Process one ground transport iteration; failures are logged and isolated."""
+    import logging
+    try:
+        raw=transport.recv()
+        if raw:
+            msg=link.receive(raw)
+            from ..proto.messages import AckMessage
+            if isinstance(msg,AckMessage):client.receive_ack(msg)
+        client.tick(); now=clock()
+        if now-last_ping>=1:transport.send(link.ping()); last_ping=now
+        return last_ping
+    except Exception:
+        logging.exception('Ground transport pump iteration failed')
+        return last_ping
+
+def pump_loop(transport, link, client, stop_event=None, sleep=time.sleep):
+    """Run the transport pump, surviving exceptions from individual iterations."""
+    last_ping=0
+    while stop_event is None or not stop_event.is_set():
+        last_ping=pump_iteration(transport,link,client,last_ping)
+        sleep(.005)
 
 def create_layout(link=None, commands=None):
     from dash import dcc, html
@@ -196,17 +221,6 @@ def main(argv=None):
         transport=GroundMAVLinkTransport(t['connection'],t.get('target_system',1))
     else:raise ValueError('unknown ground transport '+typ)
     link=GroundLink(); client=CommandClient(transport.send); app=create_app(link,client,cfg)
-    def pump():
-        last_ping=0
-        while True:
-            raw=transport.recv()
-            if raw:
-                msg=link.receive(raw)
-                from ..proto.messages import AckMessage
-                if isinstance(msg,AckMessage):client.receive_ack(msg)
-            client.tick(); now=time.monotonic()
-            if now-last_ping>=1:transport.send(link.ping()); last_ping=now
-            time.sleep(.005)
-    threading.Thread(target=pump,daemon=True).start()
+    threading.Thread(target=pump_loop,args=(transport,link,client),daemon=True).start()
     app.run(host=cfg.get('app',{}).get('host','127.0.0.1'),port=cfg.get('app',{}).get('port',8050),debug=False)
 if __name__=='__main__':main()

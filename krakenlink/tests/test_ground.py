@@ -96,3 +96,49 @@ def test_app_figures_render_synthetic_ground_frames():
 def test_ping_sequence_increments():
     g=GroundLink()
     assert [decode_frame(g.ping()).seq for _ in range(3)]==[0,1,2]
+
+def test_command_client_concurrent_submit_tick_and_ack():
+    import threading, time
+    sent=[]; failures=[]; client=CommandClient(lambda frame:(time.sleep(0),sent.append(frame)),start_id=0)
+    finished=threading.Event()
+    def submitter():
+        try:
+            for _ in range(2000):client.submit(8)
+        except Exception as exc:failures.append(exc)
+        finally:finished.set()
+    def worker():
+        try:
+            while not finished.is_set():
+                for cid in client.tick():client.receive_ack(AckMessage(cid,8,1,0))
+        except Exception as exc:failures.append(exc)
+    a=threading.Thread(target=submitter); b=threading.Thread(target=worker)
+    a.start(); b.start(); a.join(); b.join()
+    assert not failures
+    snapshot=client.snapshot()
+    assert len(snapshot)==2000
+    assert set(snapshot)==set(range(2000))
+    assert all(c['status'] in {'pending','accepted','done','done_warn','nack','timeout','no_response'} for c in snapshot.values())
+
+def test_ground_pump_continues_after_iteration_exception():
+    import threading
+    from krakenlink.ground.app import pump_loop
+    class Transport:
+        def __init__(self):self.calls=0
+        def recv(self):
+            self.calls+=1
+            if self.calls==1:raise OSError('temporary receive failure')
+            return b'later-frame'
+    class Link:
+        def __init__(self):self.received=[]
+        def receive(self,raw):self.received.append(raw);return None
+        def ping(self):return b'ping'
+    class Client:
+        def tick(self):return {}
+    transport=Transport(); link=Link(); stop=threading.Event(); sleeps=0
+    def short_sleep(_):
+        nonlocal sleeps
+        sleeps+=1
+        if sleeps>=2:stop.set()
+    pump_loop(transport,link,Client(),stop,short_sleep)
+    assert transport.calls==2
+    assert link.received==[b'later-frame']

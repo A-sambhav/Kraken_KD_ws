@@ -60,8 +60,14 @@ Bridge on the Pi (ssh krakenrf@192.168.50.5, then cd ~/krakenlink):
 After changing code on the laptop, copy it to the Pi and restart the bridge:
     deploy/krakenimage/push.sh
 
-Ground -> Pi commands (centre freq, gain, VFO, DOA method, ...) work from the
-Settings panel: the bridge runs as root so it can rewrite Kraken's settings.json.
+Ground -> Pi settings: GUI "Settings" tab (the bridge runs as root so it can
+rewrite Kraken's settings.json, like the Kraken web UI does).
+  - Fill in a value, press its "Set ..." button; the Command table shows
+    pending -> accepted -> done (or nack + reason).
+  - Centre frequency / gain make Kraken recalibrate: DOA pauses a few seconds.
+  - One command at a time: pressing while one is still running gives nack BUSY;
+    just press again once it is done.
+  - "Request snapshot" shows Kraken's current settings under Current Settings.
 
 
 915 MHz telemetry (once the Cube + radios are connected)

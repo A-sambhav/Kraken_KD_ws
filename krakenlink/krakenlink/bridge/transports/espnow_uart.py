@@ -1,4 +1,5 @@
 """COBS delimited UART transport for an ESP-NOW forwarder."""
+import threading
 from ...proto.frame import cobs_encode,cobs_decode
 from .base import Transport
 class ESPNowUARTTransport(Transport):
@@ -7,9 +8,11 @@ class ESPNowUARTTransport(Transport):
         if serial_instance is None:
             serial_instance=self._new_serial()
         self.serial=serial_instance; self.buf=bytearray(); self.tx=0; self.rx=0; self.bad=0; self.local_status=None
+        self.tx_lock=threading.Lock()  # ground: GUI threads and the pump thread both send
     def send(self,frame):
-        try:self._ensure(); self.serial.write(cobs_encode(frame)+b'\0'); self.tx+=1; return True
-        except Exception:self.bad+=1; self._lost(); return False
+        with self.tx_lock:
+            try:self._ensure(); self.serial.write(cobs_encode(frame)+b'\0'); self.tx+=1; return True
+            except Exception:self.bad+=1; self._lost(); return False
     def recv(self):
         try:
             self._ensure(); data=self.serial.read(4096)
