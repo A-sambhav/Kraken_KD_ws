@@ -1,0 +1,22 @@
+# KrakenLink bridge on the KrakenSDR image. Rendered by run_bridge.sh (AIR port detected at start).
+daq_fs = 2400000
+
+[kraken]
+share = "/home/krakenrf/krakensdr_doa/krakensdr_doa/_share"
+
+[transport]
+type = "espnow_uart"
+port = "@AIR_PORT@"
+baud = 460800
+
+[rate]
+bytes_per_second = 2500
+doa_hz = 5
+spectrum_hz = 1
+
+[commands]
+calibration_timeout = 30.0
+calib_settle_s = 1.0
+
+[logging]
+directory = "/home/krakenrf/krakenlink/logs"

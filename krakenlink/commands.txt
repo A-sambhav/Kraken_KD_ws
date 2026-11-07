@@ -30,25 +30,38 @@ Optional: run the tests
     PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests
 
 
-LAN test against the REAL Kraken on the Pi (no radio needed)
-=============================================================
-Pi is 192.168.50.5 (user krakenrf). Laptop must be 192.168.50.226
-(edit "host" in bridge.lan.toml on the Pi if the laptop IP changes).
+REAL system: Pi 5 (official KrakenSDR image) -> ESP-NOW -> laptop ground app
+==============================================================================
+Pi is 192.168.50.5 (user krakenrf). Kraken runs from the image's own service.
+Our bridge lives only in ~/krakenlink on the Pi and starts on boot
+(systemd unit krakenlink-bridge.service). Details: deploy/krakenimage/README.md
 
-1) On the Pi (ssh krakenrf@192.168.50.5):
-    cd ~/krakenlink
-    sudo .venv/bin/python -m krakenlink.bridge --config bridge.lan.toml
+Both ESP32-S3 boards must be plugged into their "COM" USB port (not "USB"):
+  AIR    -> Pi       (firmware: pio run -d firmware/esp32_link -e air_s3 -t upload)
+  GROUND -> laptop   (firmware: pio run -d firmware/esp32_link -e ground_s3 -t upload)
+
+1) Power the Pi + KrakenSDR. Nothing to type: Kraken and the bridge start on boot.
 
 2) On the laptop:
     cd ~/Storage/Kraken_KD_ws/krakenlink
-    python -m krakenlink.ground --config ground.lan.toml
+    python3 -m krakenlink.ground --config ground.espnow.toml
 
 3) Open http://127.0.0.1:8050
-   Note: DOA/compass stay empty until a signal opens the VFO squelch
-   (VFO 0 squelch is Manual -80 dB in Kraken).
+   DOA/compass only move when a signal opens the VFO squelch in Kraken
+   (Kraken UI: http://192.168.50.5:8080).
 
-Stop the bridge on the Pi:
-    sudo pkill -f "^\.venv/bin/python -m krakenlink.bridge"
+Bridge on the Pi (ssh krakenrf@192.168.50.5, then cd ~/krakenlink):
+    ./run_bridge.sh status                      is it running, which ESP port
+    ./run_bridge.sh log                         last 40 log lines
+    sudo systemctl restart krakenlink-bridge    restart (e.g. after replugging the ESP32)
+    sudo systemctl stop krakenlink-bridge       stop until next boot
+    ./run_bridge.sh remove-service              stop starting on boot
+
+After changing code on the laptop, copy it to the Pi and restart the bridge:
+    deploy/krakenimage/push.sh
+
+Note: ground -> Pi commands (retune etc.) are refused for now: the bridge runs as
+krakenrf and Kraken's settings.json is root-owned.
 
 
 915 MHz telemetry (once the Cube + radios are connected)

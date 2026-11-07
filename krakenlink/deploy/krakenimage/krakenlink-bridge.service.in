@@ -1,0 +1,17 @@
+[Unit]
+Description=KrakenLink bridge (Kraken DOA -> ESP-NOW)
+After=krakensdr.service
+Wants=krakensdr.service
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@HERE@
+ExecStart=@HERE@/run_bridge.sh run
+# Retries until the ESP32 is plugged in and Kraken has written its files.
+Restart=always
+RestartSec=5
+Nice=10
+
+[Install]
+WantedBy=multi-user.target
