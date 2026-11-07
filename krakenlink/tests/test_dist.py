@@ -84,8 +84,20 @@ def test_flash_port_and_role_selection(tmp_path):
     assert result.returncode != 0 and "folder named air or ground" in result.stderr
 
 
+RUNTIME = {".venv", "logs", "__pycache__"}  # created by using a bundle in place (see .gitignore)
+RUNTIME_FILES = {"ground/ground.toml", "raspi/bridge.toml"}
+
+
 def tree_bytes(root):
-    return {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+    """sha256 per generated file; hashes keep a failing diff small (raw bytes made pytest use ~11 GB)."""
+    import hashlib
+    out = {}
+    for p in root.rglob("*"):
+        rel = p.relative_to(root)
+        if not p.is_file() or RUNTIME.intersection(rel.parts) or str(rel) in RUNTIME_FILES:
+            continue
+        out[str(rel)] = hashlib.sha256(p.read_bytes()).hexdigest()
+    return out
 
 
 def test_committed_dist_matches_generator(tmp_path):

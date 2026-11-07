@@ -1029,12 +1029,12 @@ cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && {
 
 # Acceptance criteria (Phase 8 — serial reconnect, §22)
 
-- [ ] New tests in `krakenlink/tests/test_espnow_reconnect.py` with a fake serial factory and an injected clock (add an optional `clock=time.monotonic` constructor arg if needed; default behaviour unchanged):
-  - [ ] device disappears (read raises), then the factory raises for 3 s ("unplugged"), then succeeds: with `recv()` called every 5 ms of fake time and `reopen_interval=2`, the port is reopened within `reopen_interval` of the device coming back, and frames written by the fake device afterwards are returned by `recv()`.
-  - [ ] while reconnect is pending, `reopen_at` never moves and no exception escapes `send()`/`recv()`.
-  - [ ] a garbage packet (fails `cobs_decode`) followed by a valid frame: `recv()` returns the valid frame, `bad` increased by 1, the port was never closed/reopened.
-  - [ ] a write that raises `serial.SerialTimeoutException`-like error closes the port and schedules a reopen; `send()` returns False.
-- [ ] All earlier tests pass unmodified; `krakensdr_doa/` unchanged.
+- [x] New tests in `krakenlink/tests/test_espnow_reconnect.py` with a fake serial factory and an injected clock (add an optional `clock=time.monotonic` constructor arg if needed; default behaviour unchanged):
+  - [x] device disappears (read raises), then the factory raises for 3 s ("unplugged"), then succeeds: with `recv()` called every 5 ms of fake time and `reopen_interval=2`, the port is reopened within `reopen_interval` of the device coming back, and frames written by the fake device afterwards are returned by `recv()`.
+  - [x] while reconnect is pending, `reopen_at` never moves and no exception escapes `send()`/`recv()`.
+  - [x] a garbage packet (fails `cobs_decode`) followed by a valid frame: `recv()` returns the valid frame, `bad` increased by 1, the port was never closed/reopened.
+  - [x] a write that raises `serial.SerialTimeoutException`-like error closes the port and schedules a reopen; `send()` returns False.
+- [x] All earlier tests pass unmodified; `krakensdr_doa/` unchanged.
 
 # Test/verify command (Phase 8)
 
