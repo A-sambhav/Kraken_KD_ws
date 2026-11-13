@@ -7,6 +7,13 @@ cd dist/raspi
 ./deploy.sh krakenrf@<pi-ip>
 ```
 
+From a Windows laptop (uses only the built-in OpenSSH client):
+
+```bat
+cd dist\raspi
+deploy.bat krakenrf@<pi-ip>
+```
+
 The deploy script copies the bundle to `~/krakenlink` and runs its installer. The bridge is installed as a
 systemd service. It uses only files in this folder and adds `/etc/systemd/system/krakenlink-bridge.service`.
 

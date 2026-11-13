@@ -1156,14 +1156,14 @@ cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && g
 
 # Acceptance criteria (Phase 9 — Windows laptop support, §23)
 
-- [ ] `/.gitattributes` exists with the §23.1 rules; `git check-attr eol` gives `lf` for `dist/raspi/install.sh` and `crlf` for `dist/ground/run_ground.ps1` (pytest).
-- [ ] `find_esp_ports` returns only VID 0x1A86/0x303A devices, sorted; `python -m krakenlink.tools.ports` exit codes 0/1 per §23.2 (pytest with fake port objects / monkeypatched `comports`); `deploy/esp/find_port.py` likewise filters 0x1A86 only (pytest, imported by path with monkeypatched comports). `detect_ports` tests unchanged and passing.
-- [ ] `make_dist.sh` outputs every §23.3 file; layout test in `tests/test_dist.py` extended (existing assertions kept, only the expected set grows); committed `dist/` regenerated and byte-identical to a fresh run.
-- [ ] Every `.ps1` and `.bat` under `krakenlink/deploy/` and `dist/` is ASCII, uses CRLF line endings only (no bare LF), each `.bat` matches the §23.3 template for its `.ps1`; each `.ps1` contains `param(`, `$ErrorActionPreference = 'Stop'`, `$PSScriptRoot` and a `-Help`/`[switch]$Help` (pytest).
-- [ ] Static content checks (pytest): `run_ground.ps1` contains `UTF8Encoding $false`, `finally`, `krakenlink.tools.ports`, `127.0.0.1:8050`; `flash.ps1` contains `Get-FileHash`, `esptool==4.8.1`, `write_flash 0x0`, `find_port.py`; `deploy.ps1` contains `scp -r`, `krakenlink.incoming`, `bridge.toml`, `install.sh` and no `rsync`.
-- [ ] If `pwsh` is on PATH: every `.ps1` parses with no errors (`[System.Management.Automation.Language.Parser]::ParseFile`), `-Help` exits 0 for all of them, `run_ground.ps1 -NoBrowser` in a fresh bundle without `.venv` exits non-zero with "Missing .venv", and `flash.ps1` copied into a folder named `other` exits 2 with "folder named air or ground". If `pwsh` is absent these tests are skipped with a reason (pytest.skip).
-- [ ] `ground/app.py` reads config with `encoding='utf-8'`; READMEs and `dist/README.md` contain the Windows instructions of §23.4–23.7.
-- [ ] All `.sh` scripts and their behaviour unchanged except `make_dist.sh`; all earlier tests pass; `krakensdr_doa/` unchanged.
+- [x] `/.gitattributes` exists with the §23.1 rules; `git check-attr eol` gives `lf` for `dist/raspi/install.sh` and `crlf` for `dist/ground/run_ground.ps1` (pytest).
+- [x] `find_esp_ports` returns only VID 0x1A86/0x303A devices, sorted; `python -m krakenlink.tools.ports` exit codes 0/1 per §23.2 (pytest with fake port objects / monkeypatched `comports`); `deploy/esp/find_port.py` likewise filters 0x1A86 only (pytest, imported by path with monkeypatched comports). `detect_ports` tests unchanged and passing.
+- [x] `make_dist.sh` outputs every §23.3 file; layout test in `tests/test_dist.py` extended (existing assertions kept, only the expected set grows); committed `dist/` regenerated and byte-identical to a fresh run.
+- [x] Every `.ps1` and `.bat` under `krakenlink/deploy/` and `dist/` is ASCII, uses CRLF line endings only (no bare LF), each `.bat` matches the §23.3 template for its `.ps1`; each `.ps1` contains `param(`, `$ErrorActionPreference = 'Stop'`, `$PSScriptRoot` and a `-Help`/`[switch]$Help` (pytest).
+- [x] Static content checks (pytest): `run_ground.ps1` contains `UTF8Encoding $false`, `finally`, `krakenlink.tools.ports`, `127.0.0.1:8050`; `flash.ps1` contains `Get-FileHash`, `esptool==4.8.1`, `write_flash 0x0`, `find_port.py`; `deploy.ps1` contains `scp -r`, `krakenlink.incoming`, `bridge.toml`, `install.sh` and no `rsync`.
+- [x] If `pwsh` is on PATH: every `.ps1` parses with no errors (`[System.Management.Automation.Language.Parser]::ParseFile`), `-Help` exits 0 for all of them, `run_ground.ps1 -NoBrowser` in a fresh bundle without `.venv` exits non-zero with "Missing .venv", and `flash.ps1` copied into a folder named `other` exits 2 with "folder named air or ground". If `pwsh` is absent these tests are skipped with a reason (pytest.skip). *(Implemented; skipped on the dev box: no pwsh. Run once on Windows/pwsh.)*
+- [x] `ground/app.py` reads config with `encoding='utf-8'`; READMEs and `dist/README.md` contain the Windows instructions of §23.4–23.7.
+- [x] All `.sh` scripts and their behaviour unchanged except `make_dist.sh`; all earlier tests pass; `krakensdr_doa/` unchanged.
 
 # Test/verify command (Phase 9)
 

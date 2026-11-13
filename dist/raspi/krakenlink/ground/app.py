@@ -209,7 +209,7 @@ def main(argv=None):
     try:import tomllib
     except ImportError:import tomli as tomllib
     ap=argparse.ArgumentParser(); ap.add_argument('--config',required=True); args=ap.parse_args(argv)
-    cfg=tomllib.loads(Path(args.config).read_text()); t=cfg.get('transport',{}); typ=t.get('type','loopback')
+    cfg=tomllib.loads(Path(args.config).read_text(encoding='utf-8')); t=cfg.get('transport',{}); typ=t.get('type','loopback')
     if typ=='loopback':
         from .transports.loopback import GroundLoopbackTransport
         transport=GroundLoopbackTransport(t.get('host','127.0.0.1'),t.get('port',14561),t.get('bind_host','127.0.0.1'),t.get('bind_port',14560))

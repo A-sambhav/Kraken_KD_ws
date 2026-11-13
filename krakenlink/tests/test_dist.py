@@ -16,6 +16,8 @@ def test_make_dist_layout_help_and_scripts(tmp_path):
     result = run([str(SRC / "make_dist.sh"), "--out", str(out)])
     assert result.returncode == 0, result.stderr
     expected = {"raspi/krakenlink", "raspi/run_bridge.sh", "raspi/bridge.toml.in", "raspi/krakenlink-bridge.service.in", "raspi/install.sh", "raspi/uninstall.sh", "raspi/deploy.sh", "raspi/README.md", "ground/krakenlink", "ground/install.sh", "ground/run_ground.sh", "ground/ground.toml.in", "ground/requirements.txt", "ground/README.md", "esp/README.md", "esp/air/flash.sh", "esp/air/README.md", "esp/ground/flash.sh", "esp/ground/README.md", "README.md"}
+    expected |= {"raspi/deploy.ps1", "raspi/deploy.bat", "ground/install.ps1", "ground/install.bat", "ground/run_ground.ps1", "ground/run_ground.bat"}
+    expected |= {f"esp/{role}/{name}" for role in ("air", "ground") for name in ("flash.ps1", "flash.bat", "find_port.py")}
     actual = {str(p.relative_to(out)) for p in out.rglob("*") if p.is_file()}
     package_files = {name for name in actual if name.startswith(("raspi/krakenlink/", "ground/krakenlink/"))}
     assert (expected - {"raspi/krakenlink", "ground/krakenlink"}) | package_files == actual
