@@ -932,6 +932,118 @@ packet after opening mid-stream) also goes to `_lost()` and closes a healthy por
 ### 22.2 Not in scope
 No change to bridge/ground logic, protocol, firmware, deploy scripts. `dist/` is regenerated afterwards.
 
+## 23. Windows support for the laptop side of `dist/` (v1.0)
+
+Goal: a Windows 10/11 laptop can do everything a Linux laptop does with `dist/`: run the ground app
+(`dist/ground`), flash the ESP32-S3 boards (`dist/esp/*`) and deploy to the Pi (`dist/raspi`). The Pi itself stays
+Linux; nothing that runs on the Pi changes. Windows scripts are PowerShell (`.ps1`, must work in the built-in
+Windows PowerShell 5.1 **and** pwsh 7; no external modules) plus a `.bat` wrapper per script so users can
+double-click or run from cmd. Existing `.sh` scripts keep working unchanged on Linux.
+
+### 23.1 Line endings (`/.gitattributes`, new, repo root)
+A Windows `git clone` must not turn `.sh`/`.in`/`.service` files into CRLF (bash on the Pi would break), and `.bat`
+must be CRLF. Add:
+```
+*.sh       text eol=lf
+*.in       text eol=lf
+*.service  text eol=lf
+*.toml     text eol=lf
+*.py       text eol=lf
+*.ps1      text eol=crlf
+*.bat      text eol=crlf
+*.bin      binary
+```
+All new `.ps1`/`.bat` files are committed with CRLF endings; all new `.ps1` are ASCII-only (PS 5.1 reads BOM-less
+files as ANSI).
+
+### 23.2 Cross-platform port finder (Python)
+Add to `krakenlink/krakenlink/tools/ports.py` (keep `detect_ports` unchanged):
+- `find_esp_ports(ports=None)` → list of device names (e.g. `COM5`, `/dev/ttyACM0`) whose USB VID is `0x1A86`
+  (CH343) or `0x303A` (Espressif), sorted by device name. `ports` defaults to
+  `serial.tools.list_ports.comports()`; tests pass fake objects with `.device` and `.vid`.
+- `python -m krakenlink.tools.ports [--esp]` (add `__main__` handling inside `ports.py` or a `if __name__`
+  block; `--esp` is the default): prints one matching device per line; exit 0 if at least one, else exit 1 and
+  print "No ESP32 port found" to stderr.
+- Standalone copy for the ESP bundle: `krakenlink/deploy/esp/find_port.py` — no krakenlink import, only pyserial;
+  same output/exit contract; filters VID `0x1A86` only (same as `flash.sh`).
+
+### 23.3 New sources → output (add to `make_dist.sh` and §21.1 table)
+| Source (`krakenlink/deploy/…`) | Output |
+|---|---|
+| `ground/{install.ps1,install.bat,run_ground.ps1,run_ground.bat}` | `dist/ground/` |
+| `esp/{flash.ps1,flash.bat,find_port.py}` | `dist/esp/air/`, `dist/esp/ground/` |
+| `krakenimage/{deploy.ps1,deploy.bat}` | `dist/raspi/` |
+
+Each `X.bat` is exactly: `@echo off` then
+`powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0X.ps1" %*` then `exit /b %ERRORLEVEL%`.
+Every `.ps1` starts with a `param(...)` block, sets `$ErrorActionPreference = 'Stop'`, supports `-Help` (prints
+usage, exit 0, no side effects) and finds its own folder with `$PSScriptRoot`. Python is located as: `py -3` if the
+`py` launcher exists, else `python`; refuse < 3.9 with a clear message ("Install Python 3.9+ from python.org and
+tick 'Add python.exe to PATH'"). Native-command failures are checked via `$LASTEXITCODE` (exit non-zero with a
+message).
+
+### 23.4 `dist/ground` on Windows
+- `install.ps1 [-Help]`: clear `$env:PYTHONPATH`; check Python ≥ 3.9; `python -m venv .venv`;
+  `.venv\Scripts\python.exe -m pip install -r requirements.txt`; import check
+  `krakenlink.ground.app` with `PYTHONPATH` = this folder; print "Ground app installed.". Idempotent. No dialout
+  step. If the import check fails, exit 1.
+- `run_ground.ps1 [-Port COMx] [-NoBrowser] [-Help]`: missing `.venv\Scripts\python.exe` → "Missing .venv; run
+  install.bat first", exit 1 (checked **before** port detection so the message is testable without hardware).
+  Port = `-Port`, else first line of `.venv\Scripts\python.exe -m krakenlink.tools.ports --esp` (run with cwd =
+  this folder); none → "No GROUND ESP32 port found (plug it into its COM port or pass -Port COMx)", exit 1.
+  Render `ground.toml.in` → `ground.toml` replacing `@GROUND_PORT@`, written as UTF-8 **without BOM**
+  (`[IO.File]::WriteAllText(path, text, (New-Object Text.UTF8Encoding $false))`). Start
+  `.venv\Scripts\python.exe -m krakenlink.ground --config ground.toml` (cwd = this folder) with
+  `Start-Process -NoNewWindow -PassThru`; unless `-NoBrowser`, poll `http://127.0.0.1:8050` up to 60 s
+  (`Invoke-WebRequest -UseBasicParsing -TimeoutSec 1`) and then `Start-Process http://127.0.0.1:8050`; wait for the
+  process; in a `finally` block stop it if still running (Ctrl+C must not leave python running). Exit with the
+  app's exit code.
+- `README.md` (`deploy/ground/README.md`): add a "Windows" section: install Python 3.9+ from python.org (tick Add
+  to PATH), the CH343 driver comes from Windows Update (else WCH's CH343SER), run `install.bat` once then
+  `run_ground.bat` (or `run_ground.bat -Port COM5`); find the port in Device Manager → Ports (COM & LPT).
+
+### 23.5 `dist/esp/{air,ground}` on Windows
+- `flash.ps1 [-Port COMx] [-Help]`: role = this folder's name (`air`|`ground`, else
+  "flash.ps1 must be in a folder named air or ground (got: X)", exit 2 — checked before anything else after
+  `-Help`). Missing `firmware.bin`/`firmware.sha256` → same messages as flash.sh, exit 1. Verify SHA-256 with
+  `Get-FileHash -Algorithm SHA256` against the hash in `firmware.sha256` (first token, case-insensitive);
+  mismatch → exit 1. Python: if `.venv\Scripts\python.exe` is missing, create it and
+  `pip install esptool==4.8.1` (always use the venv on Windows). Port = `-Port`, else run
+  `.venv\Scripts\python.exe find_port.py`: exactly one line → use it; 0 or >1 → "Expected exactly one CH343
+  (1a86) device; found N:" plus the list, "Pass the ESP32-S3 COM port with -Port COMx", exit 1. Then
+  `.venv\Scripts\python.exe -m esptool --chip esp32s3 --port P --baud 460800 write_flash 0x0 firmware.bin`; on
+  failure "Flash failed; hold BOOT, tap RESET, then retry.", exit 1.
+- `deploy/esp/README.md`: add Windows usage (`flash.bat`, `flash.bat -Port COM5`).
+- make_dist's generated per-role README mentions `flash.bat` on Windows.
+
+### 23.6 `dist/raspi/deploy.ps1 [-Pi user@host] [-Help]` (Windows laptop → Pi)
+Uses only the OpenSSH client built into Windows 10/11 (`ssh`, `scp`); no rsync. Missing `ssh`/`scp` → message
+"Install the Windows OpenSSH Client (Settings → Optional features)", exit 1. Default Pi `krakenrf@192.168.50.5`.
+Steps (each checked via `$LASTEXITCODE`):
+1. `ssh <pi> "rm -rf ~/krakenlink.incoming"`
+2. `scp -r "<this folder>" "<pi>:krakenlink.incoming"`
+3. `ssh -t <pi> "<remote>"` where remote does, with `set -e`: `rm -rf ~/krakenlink.incoming/logs
+   ~/krakenlink.incoming/bridge.toml ~/krakenlink.incoming/.venv`; `mkdir -p ~/krakenlink`; delete everything in
+   `~/krakenlink` except `logs` and `bridge.toml`; `cp -a ~/krakenlink.incoming/. ~/krakenlink/`;
+   `rm -rf ~/krakenlink.incoming`; `find ~/krakenlink -name '*.sh' -exec sed -i 's/\r$//' {} +` (safety net if the
+   files were checked out with CRLF); `chmod +x ~/krakenlink/*.sh`; `bash ~/krakenlink/install.sh`.
+Net effect matches `deploy.sh` (`rsync --delete` keeping `logs/` and `bridge.toml`).
+- `deploy/krakenimage/README.md`: add "From a Windows laptop: `deploy.bat krakenrf@<pi-ip>`".
+
+### 23.7 Docs
+`dist/README.md` (written by make_dist.sh) gains Windows equivalents for each step:
+`cd dist\raspi && deploy.bat krakenrf@<pi-ip>`, `cd dist\ground && install.bat && run_ground.bat`, and
+`dist\esp\<role>\flash.bat`.
+
+### 23.8 Python on Windows
+`krakenlink/krakenlink/ground/app.py` `main()`: read the config with `read_text(encoding='utf-8')`. No other
+Python changes are expected; if the worker finds another Linux-only path on the ground/flash code path it
+reports it rather than changing it.
+
+### 23.9 Not in scope
+Pi-side scripts and bridge behaviour, protocol, firmware, `krakensdr_doa/`, the old `deploy/{pi,laptop}` scripts,
+a Windows build of the firmware (`make_dist.sh --firmware` stays Linux/WSL), installers/exe packaging.
+
 ---
 
 # Acceptance criteria (Phase 2 — checked by reviewer)
@@ -1040,4 +1152,21 @@ cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && {
 
 ```bash
 cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && git diff --quiet HEAD -- ../krakensdr_doa && echo PHASE8 PASS
+```
+
+# Acceptance criteria (Phase 9 — Windows laptop support, §23)
+
+- [ ] `/.gitattributes` exists with the §23.1 rules; `git check-attr eol` gives `lf` for `dist/raspi/install.sh` and `crlf` for `dist/ground/run_ground.ps1` (pytest).
+- [ ] `find_esp_ports` returns only VID 0x1A86/0x303A devices, sorted; `python -m krakenlink.tools.ports` exit codes 0/1 per §23.2 (pytest with fake port objects / monkeypatched `comports`); `deploy/esp/find_port.py` likewise filters 0x1A86 only (pytest, imported by path with monkeypatched comports). `detect_ports` tests unchanged and passing.
+- [ ] `make_dist.sh` outputs every §23.3 file; layout test in `tests/test_dist.py` extended (existing assertions kept, only the expected set grows); committed `dist/` regenerated and byte-identical to a fresh run.
+- [ ] Every `.ps1` and `.bat` under `krakenlink/deploy/` and `dist/` is ASCII, uses CRLF line endings only (no bare LF), each `.bat` matches the §23.3 template for its `.ps1`; each `.ps1` contains `param(`, `$ErrorActionPreference = 'Stop'`, `$PSScriptRoot` and a `-Help`/`[switch]$Help` (pytest).
+- [ ] Static content checks (pytest): `run_ground.ps1` contains `UTF8Encoding $false`, `finally`, `krakenlink.tools.ports`, `127.0.0.1:8050`; `flash.ps1` contains `Get-FileHash`, `esptool==4.8.1`, `write_flash 0x0`, `find_port.py`; `deploy.ps1` contains `scp -r`, `krakenlink.incoming`, `bridge.toml`, `install.sh` and no `rsync`.
+- [ ] If `pwsh` is on PATH: every `.ps1` parses with no errors (`[System.Management.Automation.Language.Parser]::ParseFile`), `-Help` exits 0 for all of them, `run_ground.ps1 -NoBrowser` in a fresh bundle without `.venv` exits non-zero with "Missing .venv", and `flash.ps1` copied into a folder named `other` exits 2 with "folder named air or ground". If `pwsh` is absent these tests are skipped with a reason (pytest.skip).
+- [ ] `ground/app.py` reads config with `encoding='utf-8'`; READMEs and `dist/README.md` contain the Windows instructions of §23.4–23.7.
+- [ ] All `.sh` scripts and their behaviour unchanged except `make_dist.sh`; all earlier tests pass; `krakensdr_doa/` unchanged.
+
+# Test/verify command (Phase 9)
+
+```bash
+cd krakenlink && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests && { if command -v shellcheck >/dev/null; then shellcheck -S warning make_dist.sh deploy/*/*.sh ../dist/*/*.sh ../dist/esp/*/*.sh; else echo "shellcheck not installed: SKIPPED"; fi; } && git diff --quiet HEAD -- ../krakensdr_doa && echo PHASE9 PASS
 ```
